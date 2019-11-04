@@ -33,7 +33,8 @@ app.title = 'AirBnB DataVi'
 global state 
 state = {
     "source": " ",
-    "number": " "
+    "number": " ",
+    "review": " "
 }
 
     
@@ -73,68 +74,6 @@ def get_tables_calendars():
 
 get_tables_calendars()
 
-#def calculate_avg(source):
-
-conn = sqlite3.connect('AirBnB.db')
-c = conn.cursor()
-sql = "SELECT DISTINCT listing_id FROM Calendars_2019_06_05" 
-c.execute(sql)
-res = c.fetchall()
-listing_id = [x[0] for x in res]
-l = []
-for num in listing_id:
-
-    c.execute("SELECT available FROM Calendars_2019_06_05 WHERE listing_id = ?", (num,))
-    res = c.fetchall()
-    l.append(res)
-print(l)
-
-
-
-def build_histo_avg(source):
-    if num is None and avail is None:
-        return {
-            'data': [
-                go.Bar(
-                    x = [],
-                    y = [],
-                    visible = False          
-                )
-            ]
-        }
-    else:
-        conn = sqlite3.connect('AirBnB.db')
-        c = conn.cursor()
-        sql = "SELECT listing_id FROM " + str(state["source"]) 
-        c.execute(sql)
-        res = c.fetchall()
-        listing_id = [x[0] for x in res]
-        avail = []
-        
-        for num in listing_id:
-
-            c.execute("SELECT available FROM " + str(state["source"]) + " WHERE listing_id = ?", (num,))
-            res = c.fetchall()
-
-
-        s = 0
-        for b in avail:
-            if b == 't':
-                s = s + 1
-        avg = s / len(avail)
-        
-        return {
-            'data' : [
-                go.Bar(
-                    x = num,
-                    y = avail,
-                    marker = {
-                        'color': 'steelblue'   
-                    },
-                )
-
-            ]
-        }
 
 
 def build_histo(source, num):
@@ -198,6 +137,50 @@ def build_histo(source, num):
                     
             }
 
+def build_pie_booking(source, num):
+    if source is None and num is None: 
+        return {
+            'data': [
+                go.Pie(
+                    labels = [],
+                    values = [],
+                    hole = 0.5,
+                )
+            ],
+            'layout' : DEFAULT_LAYOUT
+        }
+    else:
+        conn = sqlite3.connect('AirBnB.db')
+        c = conn.cursor()
+        sql = "SELECT available FROM " + str(source) + " WHERE listing_id=" + str(num)
+        c.execute(sql)
+        res = c.fetchall()
+        x = ['jours disponibles', 'jours non disponibles']
+        t = 0
+        f = 0
+        avail = [y[0] for y in res]
+        for elt in avail:
+            if elt == 't':
+                t = t + 1
+            if elt == 'f':
+                f = f + 1
+        y = [t, f]
+
+        return {
+            'data': [
+                go.Pie(
+                    labels = x,
+                    values = y,
+                    hole = 0.5
+                )
+            ],
+             'layout' : go.Layout(
+                title = "Parts des jours disponibles et non disponibles sur l'année"
+            )
+        }
+
+#def build_scatter_comments()
+
 default_x = None
 default_y = None
 
@@ -237,6 +220,7 @@ app.layout = html.Div([
         ], id = "left"),
         html.Div([
             html.P("Informations complémentaires sur les annonces", style = {'color':'darkgray'}),
+
             html.P("Sélectionnez un fichier source:", style = {'color':'lightgray', 'textAlign':'center'}),
             dcc.Dropdown(
                 id = 'list_sources_right',
@@ -279,7 +263,50 @@ app.layout = html.Div([
                             ]
                         ),
                     ]
-            ),    
+            ),   
+            html.Div(
+                id = 'div3',
+                    children = [
+                        html.Div(
+                            id = 'graph3_container',
+                            children = [
+                                dcc.Graph(
+                                    id = 'pie_booking',
+                                    figure = build_pie_booking(default_x, default_y)
+                                    
+                                )
+                            ]
+                        ),
+                    ]
+            ),   
+
+            html.P("Sélectionnez un fichier reviews:", style = {'color':'lightgray', 'textAlign':'center'}),
+            dcc.Dropdown(
+                id = 'list_reviews',
+                style = {'width':'250px', 'backgroundColor':'lightgray', 'marginLeft':'auto', 'marginRight':'auto'},
+                options = build_selection_sources_right(),
+                placeholder="All",
+                multi = False
+            ),
+            html.P(),
+            html.Div([
+                html.Button('Appliquer', id='button_reviews_right', style = {'width':'90px', 'height':'30px', 'backgroundColor':'gray', 'border':'none', 'color':'white', 'cursor':'pointer'}),
+
+            ], style = {'textAlign':'center'}),
+
+            html.P("Sélectionnez un numéro d'annonce:", style = {'color':'lightgray', 'textAlign':'center'}),
+            dcc.Dropdown(
+            id = 'list2_ids',
+            style = {'width':'250px', 'backgroundColor':'lightgray', 'marginLeft':'auto', 'marginRight':'auto'},
+            options = build_selection_ids(None),
+            placeholder="All",
+            multi = False
+            ),
+            html.P(),
+            html.Div([
+                html.Button('Appliquer', id='apply_reviews_right', style = {'width':'90px', 'height':'30px', 'backgroundColor':'gray', 'border':'none', 'color':'white', 'cursor':'pointer'}),
+
+            ], style = {'textAlign':'center'}),
 
             ], id = "right"),
 
@@ -317,23 +344,33 @@ def update_ids_right(n_clicks, source):
     state["source"] = source
     l = build_selection_ids(state["source"])
     return l
-    
 
 @app.callback(
-    Output('graph_histo', 'figure'),
+    Output('list2_ids', 'options'),
+    [Input('button_reviews_right', 'n_clicks')],
+    [State('list_reviews', 'value')]
+)
+def update_ids_from_reviews(n_clicks, reviews):
+    state["review"] = reviews
+    l = build_selection_ids(state["review"])
+    return l
+
+
+@app.callback(
+    [Output('graph_histo', 'figure'), Output('pie_booking', 'figure')],
     [Input('button_ids_right', 'n_clicks')],
     [State('list_sources_right', 'value'),State('list_ids', 'value')],
 )
-def uptdate_right(n_clicks, source, num):
+def uptdate_histo_pie_right(n_clicks, source, num):
 
     state["num"] = num
     state["source"] = source
 
     if state["source"] is None and num is None:
-        return build_histo(None, None)
+        return build_histo(None, None), build_pie_booking(None, None)
     else:
         
-        return build_histo(str(state["source"]), str(num))
+        return build_histo(str(state["source"]), str(num)), build_pie_booking(str(state["source"]), str(num))
 
 
 
