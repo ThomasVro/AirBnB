@@ -1,12 +1,13 @@
-import dash 
+import dash
 from dash.dependencies import Input, Output, State
 import dash_core_components as dcc
 import dash_html_components as html
-import pandas as pd 
+import pandas as pd
 import plotly as py
 import plotly.graph_objs as go
 import sqlite3
 import csv
+import time
 
 DEFAULT_LAYOUT = go.Layout(
                 xaxis = go.layout.XAxis(
@@ -21,7 +22,7 @@ DEFAULT_LAYOUT = go.Layout(
                     showline = False,
                     zeroline = False,
                     showticklabels=False
-   
+
                 )
             )
 
@@ -30,14 +31,14 @@ app = dash.Dash(__name__)
 server = app.server
 app.title = 'AirBnB DataVi'
 
-global state 
+global state
 state = {
     "source": " ",
     "number": " ",
     "review": " "
 }
 
-    
+
 def build_selection_sources_right():
 
     conn = sqlite3.connect('AirBnB.db')
@@ -61,7 +62,7 @@ def build_selection_ids(source):
         l = []
         for elt in c.fetchall():
             l.append({'label': str(elt[0]), 'value': str(elt[0])})
-        
+
         return l
 
 
@@ -77,14 +78,14 @@ get_tables_calendars()
 
 
 def build_histo(source, num):
-    if source is None and num is None: 
+    if source is None and num is None:
         return {
             'data': [
                 go.Bar(
                     x = [],
                     y = [],
                     marker = {
-                        'color': 'cornflowerblue'   
+                        'color': 'cornflowerblue'
                     },
                     visible = False
                 )
@@ -111,7 +112,7 @@ def build_histo(source, num):
                         x = dates,
                         y = available,
                         marker = {
-                            'color': 'cornflowerblue'  
+                            'color': 'cornflowerblue'
                         },
                     )
                 ],
@@ -131,14 +132,72 @@ def build_histo(source, num):
                     showgrid = False,
                     showline = False,
                     zeroline = False,
-            
+
                 )
             )
-                    
+
+            }
+
+def build_graph_dispo_calendar(source):
+    if source is None:
+        return {
+            'data': [
+                go.Scatter(
+                    x = [],
+                    y = [],
+                    marker = {
+                        'color': 'cornflowerblue'
+                    },
+                    visible = False
+                )
+            ],
+            'layout' : DEFAULT_LAYOUT
+        }
+    else:
+        timer1 = time.time()
+        conn = sqlite3.connect('AirBnB.db')
+        c = conn.cursor()
+        sql = "select date,count(*) from "+str(source)+" where available = 'f' and date in (select DISTINCT date from "+str(source)+") group by date"
+        c.execute(sql)
+        res = c.fetchall()
+        dates = [x[0] for x in res]
+        avail = [x[1] for x in res]
+        timer2 = time.time()
+        print("TIME ELAPSED: "+str(timer2-timer1)+" s")
+        return {
+                'data': [
+                    go.Scatter(
+                        x = dates,
+                        y = avail,
+                        marker = {
+                            'color': 'cornflowerblue'
+                        },
+                    )
+                ],
+                'layout' : go.Layout(
+                title = 'Histogramme du total des annonces indisponibles sur l\'année',
+                margin = go.layout.Margin(
+                    r = 100,
+                    l = 100,
+                    pad = 10,
+                ),
+                xaxis = go.layout.XAxis(
+                    showgrid = False,
+                    showline = False,
+                    zeroline = False,
+                ),
+                yaxis = go.layout.YAxis(
+                    showgrid = False,
+                    showline = False,
+                    zeroline = False,
+
+                )
+            )
+
             }
 
 def build_pie_booking(source, num):
-    if source is None and num is None: 
+    if source is None and num is None:
         return {
             'data': [
                 go.Pie(
@@ -203,6 +262,21 @@ app.layout = html.Div([
 
             ], style = {'textAlign':'center'}),
             html.Div(
+                id = 'div4',
+                    children = [
+                        html.Div(
+                            id = 'graph4_container',
+                            children = [
+                                dcc.Graph(
+                                    id = 'graph_dispo_calendar',
+                                    figure = build_graph_dispo_calendar(default_x)
+
+                                )
+                            ]
+                        ),
+                    ]
+            ),
+            html.Div(
                 id = 'div1',
                     children = [
                         html.Div(
@@ -211,12 +285,12 @@ app.layout = html.Div([
                                 dcc.Graph(
                                     id = 'graph_histo_avg',
                                     figure = build_histo(default_x, default_y)
-                                    
+
                                 )
                             ]
                         ),
                     ]
-            ),    
+            )
         ], id = "left"),
         html.Div([
             html.P("Informations complémentaires sur les annonces", style = {'color':'darkgray'}),
@@ -258,12 +332,12 @@ app.layout = html.Div([
                                 dcc.Graph(
                                     id = 'graph_histo',
                                     figure = build_histo(default_x, default_y)
-                                    
+
                                 )
                             ]
                         ),
                     ]
-            ),   
+            ),
             html.Div(
                 id = 'div3',
                     children = [
@@ -273,12 +347,12 @@ app.layout = html.Div([
                                 dcc.Graph(
                                     id = 'pie_booking',
                                     figure = build_pie_booking(default_x, default_y)
-                                    
+
                                 )
                             ]
                         ),
                     ]
-            ),   
+            ),
 
             html.P("Sélectionnez un fichier reviews:", style = {'color':'lightgray', 'textAlign':'center'}),
             dcc.Dropdown(
@@ -311,8 +385,8 @@ app.layout = html.Div([
             ], id = "right"),
 
     ], id = "main_page"),
-   
-    
+
+
 
 ])
 '''
@@ -326,12 +400,12 @@ def update_left(n_clicks, source):
     state["source"] = source
     conn = sqlite3.connect('AirBnB.db')
     c = conn.cursor()
-    sql = "SELECT listing_id, available FROM" + str(state["source"]) 
+    sql = "SELECT listing_id, available FROM" + str(state["source"])
     c.execute(sql)
     res = c.fetchall()
     listing_id = [x[0] for x in res]
     avail = [y[1] for y in res]
-    
+
 
     #return build_selection_ids(source)
 '''
@@ -369,10 +443,20 @@ def uptdate_histo_pie_right(n_clicks, source, num):
     if state["source"] is None and num is None:
         return build_histo(None, None), build_pie_booking(None, None)
     else:
-        
+
         return build_histo(str(state["source"]), str(num)), build_pie_booking(str(state["source"]), str(num))
 
-
+@app.callback(
+    Output('graph_dispo_calendar','figure'),
+    [Input('button_sources','n_clicks')],
+    [State('list_sources','value')]
+)
+def update_graph_dispo_calendar(n_clicks,source):
+    state["source"] = source
+    if state["source"] is None:
+        return build_graph_dispo_calendar(None)
+    else:
+        return build_graph_dispo_calendar(str(state["source"]))
 
 if __name__ == '__main__':
     app.run_server(debug=True)
