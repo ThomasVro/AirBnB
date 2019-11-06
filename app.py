@@ -256,7 +256,7 @@ def build_pie_more_than_120_days(source):
         sql = "select count(*) from "+str(source)+" where available='f' group by listing_id"
         c.execute(sql)
         res = c.fetchall()
-        x = ['Annonces louées plus de 120 jours', 'Annonces louées moins de 120 jours']
+        x = ['Annonces indisponibles plus de 120 jours', 'Annonces indisponibles moins de 120 jours']
         t = 0
         f = 0
         avail = [y[0] for y in res]
@@ -276,7 +276,7 @@ def build_pie_more_than_120_days(source):
                 )
             ],
              'layout' : go.Layout(
-                title = "Part des annonces louées plus de 120 jours dans l'année"
+                title = "Part des annonces indisponibles plus de 120 jours dans l'année"
             )
     }
 
