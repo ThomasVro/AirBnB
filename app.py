@@ -238,6 +238,48 @@ def build_pie_booking(source, num):
             )
         }
 
+def build_pie_more_than_120_days(source):
+    if source is None:
+        return {
+            'data': [
+                go.Pie(
+                    labels = [],
+                    values = [],
+                    hole = 0.5,
+                )
+            ],
+            'layout' : DEFAULT_LAYOUT
+        }
+    else:
+        conn = sqlite3.connect('AirBnB.db')
+        c = conn.cursor()
+        sql = "select count(*) from "+str(source)+" where available='f' group by listing_id"
+        c.execute(sql)
+        res = c.fetchall()
+        x = ['Annonces louées plus de 120 jours', 'Annonces louées moins de 120 jours']
+        t = 0
+        f = 0
+        avail = [y[0] for y in res]
+        for jours in avail:
+            if jours>120:
+                t += 1
+            if jours<=120:
+                f += 1
+        y = [t, f]
+
+        return {
+            'data': [
+                go.Pie(
+                    labels = x,
+                    values = y,
+                    hole = 0.5
+                )
+            ],
+             'layout' : go.Layout(
+                title = "Part des annonces louées plus de 120 jours dans l'année"
+            )
+    }
+
 #def build_scatter_comments()
 
 default_x = None
@@ -270,6 +312,21 @@ app.layout = html.Div([
                                 dcc.Graph(
                                     id = 'graph_dispo_calendar',
                                     figure = build_graph_dispo_calendar(default_x)
+
+                                )
+                            ]
+                        ),
+                    ]
+            ),
+            html.Div(
+                id = 'div_pie_more_than_120_days',
+                    children = [
+                        html.Div(
+                            id = 'pie_more_than_120_days_container',
+                            children = [
+                                dcc.Graph(
+                                    id = 'pie_more_than_120_days',
+                                    figure = build_pie_more_than_120_days(default_x)
 
                                 )
                             ]
@@ -457,6 +514,18 @@ def update_graph_dispo_calendar(n_clicks,source):
         return build_graph_dispo_calendar(None)
     else:
         return build_graph_dispo_calendar(str(state["source"]))
+
+@app.callback(
+    Output('pie_more_than_120_days','figure'),
+    [Input('button_sources','n_clicks')],
+    [State('list_sources','value')]
+)
+def update_pie_more_than_120_days(n_clicks,source):
+    state["source"] = source
+    if state["source"] is None:
+        return build_pie_more_than_120_days(None)
+    else:
+        return build_pie_more_than_120_days(str(state["source"]))
 
 if __name__ == '__main__':
     app.run_server(debug=True)
