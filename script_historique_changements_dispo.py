@@ -31,7 +31,7 @@ for listing_id in listing_ids:  # pour chaque annonce
     temp_month1 = {}  # Pour stocker le mois 2 et ne pas avoir à le recharger via SQL en mois 1 lors de la prochaine comparaison
 
     # Liste des véritables périodes indisponibles
-    synthese_periodes_indisponibles = []
+    synthese_periodes_indisponibles = [0]*num_days
 
     while j < len(tab_date):
         # on construit une paire de deux dates de scraping
@@ -163,114 +163,55 @@ for listing_id in listing_ids:  # pour chaque annonce
         }
         interpretation[listing_id][str(paire)]["Annulations"] = annulations
 
+        interpretation[listing_id][str(paire[0])]=month1_reservations_liste
+        interpretation[listing_id][str(paire[1])]=month2_reservations_liste
+
         # print(paire)
         # print(month1_dispos)
         # print(month1_reservations_liste)
         # print(month2_dispos)
-        # print(month2_reservations_liste)
-
-        # Périodes réellement indispo
-        month1_reservations_liste_date = []
-        month1_jours_indispo = 0
-        month2_reservations_liste_date = []
-        month2_jours_indispo = 0
-        for periode in month1_reservations_liste:
-            periode_date = (datetime.datetime.strptime(periode[0], "%Y-%m-%d").date(), datetime.datetime.strptime(periode[1], "%Y-%m-%d").date())
-            month1_jours_indispo+=(periode_date[1]-periode_date[0]).days+1
-            month1_reservations_liste_date.append(periode_date)
-        for periode in month2_reservations_liste:
-            periode_date = (datetime.datetime.strptime(periode[0], "%Y-%m-%d").date(), datetime.datetime.strptime(periode[1], "%Y-%m-%d").date())
-            month2_jours_indispo+=(periode_date[1]-periode_date[0]).days+1
-            month2_reservations_liste_date.append(periode_date)
-        
-        print(paire)
-        print(month1_reservations_liste_date)
-        print()
-        print(month2_reservations_liste_date)
-        print()
-
-        # if month1_jours_indispo == month2_jours_indispo:
-        #     for periode in month2_reservations_liste_datetime:
-        #         synthese_periodes_indisponibles.append(periode)
-        # #Si tout était indispo et que le calendrier a été ouvert puis certaines périodes indispo
-        # if month1_jours_indispo==31 and month2_jours_indispo<31:
-        #     synthese_periodes_indisponibles = []
-        #     for periode in month2_reservations_liste_datetime:
-        #         synthese_periodes_indisponibles.append(periode)
-        
+        # print(month2_reservations_liste)        
         i = j
         j += 1
+    
+    compteur_general = 1
+    for scraping in tab_date:
+        month_reservations = interpretation[listing_id][str(scraping)]
+        month_reservations_dates = []
+        for periode in month_reservations:
+            periode_date = (datetime.datetime.strptime(periode[0], "%Y-%m-%d").date(), datetime.datetime.strptime(periode[1], "%Y-%m-%d").date())
+            month_reservations_dates.append(periode_date)
+        month_reservations_dates = sorted(month_reservations_dates,key=lambda x:x[0].day)
 
+        temp = [0]*num_days
+        compteur=0
+        for periode in month_reservations_dates:
+            compteur+=1
+            for i in range(periode[0].day,periode[1].day+1):
+                temp[i-1]=compteur
+        if str(listing_id)=="11899722":
+            print("Temp")
+            print(temp)
+            print()
 
-    # On trie par date de début de périodes indispo
-    synthese_periodes_indisponibles = sorted(
-        synthese_periodes_indisponibles, key=lambda x: x[0])
-    for periode in synthese_periodes_indisponibles:
-        print(periode)
-
-    # Nettoyage des périodes
-    # if len(synthese_periodes_indisponibles)>1:
-    #     synthese_periodes_indisponibles_cleaned = synthese_periodes_indisponibles.copy()
-    #     temp = []
-    #     for cur, nxt in zip (synthese_periodes_indisponibles, synthese_periodes_indisponibles[1:]):
-    #         if cur[0]==nxt[0] and cur[1]<nxt[1]:
-    #             temp.append(cur)
-    #             periode_englobante = (nxt[0],nxt[1])
-    #             break
-    #     print("Periode englobante")
-    #     print(periode_englobante)
-    #     for periode in synthese_periodes_indisponibles:
-    #         if periode[0]>periode_englobante[0]:
-    #             if periode[1]<periode_englobante[1] or periode[1]==periode_englobante[1]:
-    #                 temp.append(periode)
-    #     print(temp)
-    # for periode in synthese_periodes_indisponibles_cleaned:
-    #     print(periode)
-    # print()
-    # for cur, nxt in zip (synthese_periodes_indisponibles, synthese_periodes_indisponibles[1:]):
-    #     if cur[0]==nxt[0] and cur[1]<nxt[1]:
-    #         i = synthese_periodes_indisponibles_cleaned.index(nxt)
-    #         new_periode = (cur[1]+datetime.timedelta(days=1),nxt[1])
-    #         synthese_periodes_indisponibles_cleaned.append(new_periode)
-    #         # synthese_periodes_indisponibles_cleaned.remove(synthese_periodes_indisponibles_cleaned[i])
-    # synthese_periodes_indisponibles_cleaned = sorted(synthese_periodes_indisponibles_cleaned,key=lambda x:x[0])
-
-    #On retire les périodes qui sont plus larges que d'autres
-    #Ex : Du 2018-05-01 au 2018-05-31 est plus large que 2018-05-09 au 2018-05-31
-    # donc on retire la première période
-    # for cur, nxt in zip (synthese_periodes_indisponibles, synthese_periodes_indisponibles[1:]):
-    #     if (cur[0]<nxt[0] and cur[1]==nxt[1]) or (cur[0]==nxt[0] and cur[1]>nxt[1]):
-    #         i = synthese_periodes_indisponibles.index(cur)
-    #         synthese_periodes_indisponibles_cleaned.remove(synthese_periodes_indisponibles[i])
-    # print()
-    # for periode in synthese_periodes_indisponibles_cleaned:
-    #     print(periode)
-
-    # #On décompose les périodes englobants une période précédente indispo
-    # #Ex : Du 2018-05-15 au 2018-05-17 est comprise dans 2018-05-15 au 2018-05-31
-    # # donc on remplace la 2e période par (2018-05-18 au 2018-05-31)
-    # for cur, nxt in zip (synthese_periodes_indisponibles, synthese_periodes_indisponibles[1:]):
-    #     if cur[0]==nxt[0] and cur[1]<nxt[1]:
-    #         #On retire nxt
-    #         i = synthese_periodes_indisponibles_cleaned.index(nxt)
-    #         new_periode = (cur[1]+datetime.timedelta(days=1),nxt[1])
-    #         synthese_periodes_indisponibles_cleaned[i] = new_periode
-    # print()
-    # for periode in synthese_periodes_indisponibles_cleaned:
-    #     print(periode)
-
-    # #Dernier cleaning
-    # synthese_periodes_indisponibles = synthese_periodes_indisponibles_cleaned.copy()
-    # for cur, nxt in zip (synthese_periodes_indisponibles, synthese_periodes_indisponibles[1:]):
-    #     if cur[0]<nxt[0] and cur[1]>nxt[1]:
-    #         #On retire nxt
-    #         i = synthese_periodes_indisponibles_cleaned.index(cur)
-    #         new_periode = (cur[0],nxt[0]-datetime.timedelta(days=1))
-    #         synthese_periodes_indisponibles_cleaned[i] = new_periode
-    # print()
-    # for periode in synthese_periodes_indisponibles_cleaned:
-    #     print(periode)
-
+        for date in range(num_days):
+            # if str(listing_id)=="4723995":
+            #     print("compteur_general "+str(compteur_general))
+            #     print()
+            #Réservation
+            if synthese_periodes_indisponibles[date]==0 and temp[date]!=0:
+                synthese_periodes_indisponibles[date]=compteur_general
+            #Annulation
+            if synthese_periodes_indisponibles[date]!=0 and temp[date]==0:
+                synthese_periodes_indisponibles[date]=0
+            if date!=num_days-1:
+                if temp[date]!=0 and temp[date+1]!=temp[date]:
+                    compteur_general+=1
+        if str(listing_id)=="11899722":
+            print("Synthese")
+            print(synthese_periodes_indisponibles)
+            print()
+            print('-----------')
 with open('results.json', 'w') as outfile:
     json.dump(interpretation, outfile)
 print("Fait.")
