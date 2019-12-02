@@ -359,7 +359,7 @@ for listing_id in listing_ids:  # pour chaque annonce
                                     periode)][id]["pourcentage"] = nouveau_pourcentage
                                 if not continuer and nouveau_pourcentage == 50:
                                     continuer = True
-        # Nettoyage commentaire à 50% tout seul
+        #ETAPE INTERMEDIAIRE : Nettoyage commentaire à 50% tout seul
         id_a_clean = []
         for periode in liste_periodes:
             # Pour chaque période, on cherche si on a un commentaire unique à 50%
@@ -381,8 +381,27 @@ for listing_id in listing_ids:  # pour chaque annonce
                                      ][commentaire]["pourcentage"] = 100.0
 
         # ETAPE 5 : Entre deux commentaires à 50% pour une période, on garde le commentaire le plus proche en date donc le premier
-        
+        liste_id_a_garder = []
+        # truc = False
+        # for periode in liste_periodes:
+        #     temp = {}
+        #     for commentaire in liaisons[str(periode)]:
+        #         if liaisons[str(periode)][commentaire]["pourcentage"] == 50:
+        #             if liste_id_a_garder == []:
+        #                 liste_id_a_garder.append(commentaire)
+        #                 temp[commentaire] = liaisons[str(periode)][commentaire]
+        #                 truc = True
+        #             if liste_id_a_garder != []:
+        #                 if truc:
+        #                     if commentaire not in liste_id_a_garder:
+        #                         liaisons[str(periode)] = temp[commentaire]
+        #                         truc = False
+        #                 if not truc:
+        #                     if commentaire in liste_id_a_garder:
 
+
+
+                        
         # Count nombre de commentaires à 100%
         count_100percent = 0
         for periode in liste_periodes:
