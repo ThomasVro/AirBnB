@@ -254,69 +254,145 @@ for listing_id in listing_ids:  # pour chaque annonce
     if liste_periodes != [(datetime.date(year, month, 1), datetime.date(year, month, num_days))] and liste_periodes != []:
         sql = "select * from listing_and_reviews where listing_id='" + \
             str(listing_id)+"' and scraping_date = '" + \
-                str(tab_date[0])+"' and id not null order by date"
+            str(tab_date[0])+"' and id not null order by date"
         c.execute(sql)
         commentaires = c.fetchall()
-        #ETAPE 1 : commentaires dans les 15 jours après la réservation
+        # ETAPE 1 : commentaires dans les 15 jours après la réservation
         for periode in liste_periodes:
-            liaisons[str(periode)]={}
+            liaisons[str(periode)] = {}
             for commentaire in commentaires:
                 date_du_commentaire = datetime.datetime.strptime(
-                commentaire[2], "%Y-%m-%d").date()
-                if periode[1] < date_du_commentaire and periode[1] > date_du_commentaire-datetime.timedelta(days=14):                    
-                    liaisons[str(periode)][commentaire[4]]={
-                        "date":commentaire[2],
-                        "reviewer_id":commentaire[5],
-                        "reviewer_name":commentaire[6],
-                        "contenu":commentaire[7]
+                    commentaire[2], "%Y-%m-%d").date()
+                if periode[1] < date_du_commentaire and periode[1] > date_du_commentaire-datetime.timedelta(days=14):
+                    liaisons[str(periode)][commentaire[4]] = {
+                        "date": commentaire[2],
+                        "reviewer_id": commentaire[5],
+                        "reviewer_name": commentaire[6],
+                        "contenu": commentaire[7]
                     }
-        #ETAPE 2 : compter le nombre de réservations qui se sont terminées 15 jours max avant chaque commentaire
-        #Pour déterminer le pourcentage de chance qu'un commentaire corresponde à une résa.
+        # ETAPE 2 : compter le nombre de réservations qui se sont terminées 15 jours max avant chaque commentaire
+        # Pour déterminer le pourcentage de chance qu'un commentaire corresponde à une résa.
         for commentaire in commentaires:
             nb_resa = 0
             date_du_commentaire = datetime.datetime.strptime(
                 commentaire[2], "%Y-%m-%d").date()
             for periode in liste_periodes:
                 if periode[1] < date_du_commentaire and periode[1] > date_du_commentaire-datetime.timedelta(days=14):
-                    nb_resa += 1                    
+                    nb_resa += 1
             for periode in liaisons:
                 if commentaire[4] in liaisons[str(periode)]:
                     pourcentage = (1/nb_resa)*100
-                    liaisons[str(periode)][commentaire[4]]["pourcentage"]=(1/nb_resa)*100
-        #ETAPE 3 : retirer les commentaires de moins de 100% pour une réservation qui a déjà un commentaire à 100%
+                    liaisons[str(periode)][commentaire[4]
+                                           ]["pourcentage"] = (1/nb_resa)*100
+        # ETAPE 3 : retirer les commentaires de moins de 100% pour une réservation qui a déjà un commentaire à 100%
         continuer = True
         while continuer:
-            continuer = False        
-            for periode in liste_periodes:            
+            continuer = False
+            for periode in liste_periodes:
                 found = False
                 id_a_modif = []
-                #Pour chaque période, on cherche si un des commentaires est à 100%
+                # Pour chaque période, on cherche si un des commentaires est à 100%
                 for commentaire in liaisons[str(periode)]:
-                    if liaisons[str(periode)][commentaire]["pourcentage"]==100:
+                    if liaisons[str(periode)][commentaire]["pourcentage"] == 100:
                         id_Cent = commentaire
                         found = True
                     else:
                         id_a_modif.append(commentaire)
-                #Si c'est le cas
-                if found and id_a_modif!=[]:
-                    print(periode)
-                    print(id_a_modif)
+                # Si c'est le cas
+                if found and id_a_modif != []:
                     temp = {}
-                    #On ne laisse que le commentaire à 100% pour cette période
+                    # On ne laisse que le commentaire à 100% pour cette période
                     for commentaire in liaisons[str(periode)]:
                         if commentaire == id_Cent:
-                            temp[commentaire] = liaisons[str(periode)][commentaire]
-                    liaisons[str(periode)]=temp
-                    #On met à jour les pourcentages des commentaires liés à d'autres périodes
+                            temp[commentaire] = liaisons[str(
+                                periode)][commentaire]
+                    liaisons[str(periode)] = temp
+                    # On met à jour les pourcentages des commentaires liés à d'autres périodes
                     for id in id_a_modif:
                         for periode in liste_periodes:
                             if id in liaisons[str(periode)]:
-                                ancien_nb_resa = int(100/liaisons[str(periode)][id]["pourcentage"])
-                                nouveau_pourcentage = (1/(ancien_nb_resa-1))*100
-                                liaisons[str(periode)][id]["pourcentage"]= nouveau_pourcentage
+                                ancien_nb_resa = int(
+                                    100/liaisons[str(periode)][id]["pourcentage"])
+                                nouveau_pourcentage = (
+                                    1/(ancien_nb_resa-1))*100
+                                liaisons[str(
+                                    periode)][id]["pourcentage"] = nouveau_pourcentage
                                 if not continuer and nouveau_pourcentage == 100:
                                     continuer = True
-    
+        # ETAPE 4 : si on a déjà deux commentaires à 50%, on retire les autres avec une proba plus faible
+        continuer = True
+        while continuer:
+            continuer = False
+            for periode in liste_periodes:
+                found = False
+                id_a_modif = []
+                id_50_1 = None
+                id_50_2 = None
+                # Pour chaque période, on cherche si un des commentaires est à 50%
+                for commentaire in liaisons[str(periode)]:
+                    if liaisons[str(periode)][commentaire]["pourcentage"] == 50:
+                        if id_50_1 == None:
+                            id_50_1 = commentaire
+                        elif id_50_2 == None:
+                            id_50_2 = commentaire
+                        found = True
+                    else:
+                        id_a_modif.append(commentaire)
+                # Si c'est le cas
+                if found and id_a_modif != []:
+                    temp = {}
+                    # On ne laisse que les commentaire à 50% pour cette période
+                    for commentaire in liaisons[str(periode)]:
+                        if commentaire == id_50_1 or commentaire == id_50_2:
+                            temp[commentaire] = liaisons[str(
+                                periode)][commentaire]
+                    liaisons[str(periode)] = temp
+                    # On met à jour les pourcentages des commentaires liés à d'autres périodes
+                    for id in id_a_modif:
+                        for periode in liste_periodes:
+                            if id in liaisons[str(periode)]:
+                                ancien_nb_resa = int(
+                                    100/liaisons[str(periode)][id]["pourcentage"])
+                                nouveau_pourcentage = (
+                                    1/(ancien_nb_resa-1))*100
+                                liaisons[str(
+                                    periode)][id]["pourcentage"] = nouveau_pourcentage
+                                if not continuer and nouveau_pourcentage == 50:
+                                    continuer = True
+        # Nettoyage commentaire à 50% tout seul
+        id_a_clean = []
+        for periode in liste_periodes:
+            # Pour chaque période, on cherche si on a un commentaire unique à 50%
+            for commentaire in liaisons[str(periode)]:
+                if liaisons[str(periode)][commentaire]["pourcentage"] == 50 and len(liaisons[str(periode)]) == 1:
+                    id_a_clean.append(commentaire)
+        # On cherche si un des commentaires trouvés apparaît une seule fois
+        for id in id_a_clean:
+            count = 0
+            for periode in liste_periodes:
+                for commentaire in liaisons[str(periode)]:
+                    if commentaire == id:
+                        count += 1
+            if count == 1:
+                for periode in liste_periodes:
+                    for commentaire in liaisons[str(periode)]:
+                        if commentaire == id:
+                            liaisons[str(periode)
+                                     ][commentaire]["pourcentage"] = 100.0
+
+        # ETAPE 5 : Entre deux commentaires à 50% pour une période, on garde le commentaire le plus proche en date donc le premier
+        
+
+        # Count nombre de commentaires à 100%
+        count_100percent = 0
+        for periode in liste_periodes:
+            # Pour chaque période, on cherche si un des commentaires est à 100%
+            for commentaire in liaisons[str(periode)]:
+                if liaisons[str(periode)][commentaire]["pourcentage"] == 100:
+                    count_100percent += 1
+        # On l'ajoute à results.json dans la partie Synthèse de l'annonce
+        interpretation[listing_id]["Synthese"]["Nombre de periodes validees a 100%"] = count_100percent
+
     with open('liaisons_'+str(listing_id)+'.json', 'w') as outfile:
         json.dump(liaisons, outfile)
 
