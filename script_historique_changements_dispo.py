@@ -313,12 +313,13 @@ for listing_id in listing_ids:  # pour chaque annonce
                             if id in liaisons[str(periode)]:
                                 ancien_nb_resa = int(
                                     100/liaisons[str(periode)][id]["pourcentage"])
-                                nouveau_pourcentage = (
-                                    1/(ancien_nb_resa-1))*100
-                                liaisons[str(
-                                    periode)][id]["pourcentage"] = nouveau_pourcentage
-                                if not continuer and nouveau_pourcentage == 100:
-                                    continuer = True
+                                if ancien_nb_resa > 0:
+                                    nouveau_pourcentage = (
+                                        1/(ancien_nb_resa-1))*100
+                                    liaisons[str(
+                                        periode)][id]["pourcentage"] = nouveau_pourcentage
+                                    if not continuer and nouveau_pourcentage == 100:
+                                        continuer = True
         # ETAPE 4 : si on a déjà deux commentaires à 50%, on retire les autres avec une proba plus faible
         continuer = True
         while continuer:
@@ -353,12 +354,13 @@ for listing_id in listing_ids:  # pour chaque annonce
                             if id in liaisons[str(periode)]:
                                 ancien_nb_resa = int(
                                     100/liaisons[str(periode)][id]["pourcentage"])
-                                nouveau_pourcentage = (
-                                    1/(ancien_nb_resa-1))*100
-                                liaisons[str(
-                                    periode)][id]["pourcentage"] = nouveau_pourcentage
-                                if not continuer and nouveau_pourcentage == 50:
-                                    continuer = True
+                                if ancien_nb_resa > 0:
+                                    nouveau_pourcentage = (
+                                        1/(ancien_nb_resa-1))*100
+                                    liaisons[str(
+                                        periode)][id]["pourcentage"] = nouveau_pourcentage
+                                    if not continuer and nouveau_pourcentage == 50:
+                                        continuer = True
         #ETAPE INTERMEDIAIRE : Nettoyage commentaire à 50% tout seul
         id_a_clean = []
         for periode in liste_periodes:
