@@ -384,28 +384,6 @@ for listing_id in listing_ids:  # pour chaque annonce
                             liaisons[str(periode)
                                      ][commentaire]["pourcentage"] = 100.0
 
-        # ETAPE 5 : Entre deux commentaires à 50% pour une période, on garde le commentaire le plus proche en date donc le premier
-        liste_id_a_garder = []
-        # truc = False
-        # for periode in liste_periodes:
-        #     temp = {}
-        #     for commentaire in liaisons[str(periode)]:
-        #         if liaisons[str(periode)][commentaire]["pourcentage"] == 50:
-        #             if liste_id_a_garder == []:
-        #                 liste_id_a_garder.append(commentaire)
-        #                 temp[commentaire] = liaisons[str(periode)][commentaire]
-        #                 truc = True
-        #             if liste_id_a_garder != []:
-        #                 if truc:
-        #                     if commentaire not in liste_id_a_garder:
-        #                         liaisons[str(periode)] = temp[commentaire]
-        #                         truc = False
-        #                 if not truc:
-        #                     if commentaire in liste_id_a_garder:
-
-
-
-                        
         # Count nombre de commentaires à 100%
         count_100percent = 0
         for periode in liste_periodes:
@@ -415,6 +393,64 @@ for listing_id in listing_ids:  # pour chaque annonce
                     count_100percent += 1
         # On l'ajoute à results.json dans la partie Synthèse de l'annonce
         interpretation[listing_id]["Synthese"]["Nombre de periodes validees a 100%"] = count_100percent
+
+        # ETAPE 5 : Entre deux commentaires à 50% pour une période, on garde le commentaire le plus proche en date donc le premier
+        continuer = True
+        liste_id_a_conserver = []
+        while continuer:
+            continuer = False
+            id_a_conserver = None
+            periode_du_com = None
+            temp = {}
+            for periode in liste_periodes:
+                temp2 = {}
+                for commentaire in liaisons[str(periode)]:
+                    if id_a_conserver == None and liaisons[str(periode)][commentaire]["pourcentage"] == 50:
+                        id_a_conserver = commentaire
+                        if id_a_conserver not in liste_id_a_conserver:
+                            liste_id_a_conserver.append(id_a_conserver)
+                        periode_du_com = str(periode)
+                        temp[commentaire]=liaisons[str(periode)][commentaire] #temp contient le commentaire à conserver dans la première période où il se trouve
+                        continuer = True      
+                    if id_a_conserver != None and commentaire != id_a_conserver and str(periode)!=periode_du_com:
+                        temp2[commentaire]=liaisons[str(periode)][commentaire] #temp2 contient les autres commentaires de cette période
+                if id_a_conserver != None:
+                    if str(periode) == periode_du_com:
+                        liaisons[str(periode)]=temp
+                    else:
+                        liaisons[str(periode)]=temp2
+            #Passage des commentaires maintenant uniques à 100%
+            id_a_clean = []
+            for periode in liste_periodes:
+                # Pour chaque période, on cherche si on a un commentaire unique à 50%
+                for commentaire in liaisons[str(periode)]:
+                    if liaisons[str(periode)][commentaire]["pourcentage"] == 50 and len(liaisons[str(periode)]) == 1:
+                        id_a_clean.append(commentaire)
+            # On cherche si un des commentaires trouvés apparaît une seule fois
+            for id in id_a_clean:
+                count = 0
+                for periode in liste_periodes:
+                    for commentaire in liaisons[str(periode)]:
+                        if commentaire == id:
+                            count += 1
+                if count == 1:
+                    for periode in liste_periodes:
+                        for commentaire in liaisons[str(periode)]:
+                            if commentaire == id:
+                                liaisons[str(periode)
+                                        ][commentaire]["pourcentage"] = 100.0
+
+        if liste_id_a_conserver != []:
+            interpretation[listing_id]["Synthese"]["Nombre de periodes validees par le commentaire le plus proche"] = len(liste_id_a_conserver)+1
+
+        # Count periodes sans commentaires de moins de 21 jours
+        count_sans_com = 0
+        for periode in liste_periodes:
+            # Pour chaque période, on cherche s'il n'y a pas de commentaire
+            nb_jours = periode[1].day-periode[0].day
+            if len(liaisons[str(periode)])==0 and nb_jours < 21:
+                count_sans_com += 1        
+        interpretation[listing_id]["Synthese"]["Nombre de periodes validees sans commentaires de moins de 21 jours"] = count_sans_com
 
     with open('liaisons_'+str(listing_id)+'.json', 'w') as outfile:
         json.dump(liaisons, outfile)
