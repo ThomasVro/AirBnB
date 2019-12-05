@@ -12,16 +12,27 @@ days = [datetime.date(year, month, day).strftime("%Y-%m-%d")
 
 # liste des dates de scraping
 conn = sqlite3.connect('listing_and_reviews_10annonces.db')
-c = conn.cursor()
-sql = "select distinct scraping_date from listing_and_reviews"
-c.execute(sql)
-tab_date = [x[0] for x in c.fetchall()]
 
-# liste des annonces
-c = conn.cursor()
-sql = "select distinct listing_id from listing_and_reviews order by listing_id"
-c.execute(sql)
-listing_ids = [x[0] for x in c.fetchall()]
+
+def get_items_list(sql_request):
+    c = conn.cursor()
+    c.execute(sql_request)
+    return [x[0] for x in c.fetchall()]
+
+
+def get_items_fetchall(sql_request):
+    c = conn.cursor()
+    c.execute(sql_request)
+    return c.fetchall()
+
+
+# Liste des dates de scraping
+tab_date = get_items_list(
+    "select distinct scraping_date from listing_and_reviews")
+
+# Liste des annonces
+listing_ids = get_items_list(
+    "select distinct listing_id from listing_and_reviews order by listing_id")
 
 interpretation = {}
 for listing_id in listing_ids:  # pour chaque annonce
@@ -36,27 +47,22 @@ for listing_id in listing_ids:  # pour chaque annonce
     # Liste des véritables périodes indisponibles
     synthese_periodes_indisponibles = [0]*num_days
 
+    #Remplissage de l'interprétation de chaque mois de scraping (différence d'un scraping à l'autre, nb de jours réservés, etc.)
     while j < len(tab_date):
         # on construit une paire de deux dates de scraping
         paire = [tab_date[i], tab_date[j]]
 
         # On remplit chaque tableau avec les données des scrapings correspondant
-        c = conn.cursor()
-        sql = ""
         if temp_month1 == {}:
-            sql = "select * from listing_and_reviews where listing_id='" + \
-                str(listing_id)+"' and scraping_date='" + \
-                paire[0]+"' order by scraping_date, date"
-            c.execute(sql)
-            month1 = c.fetchall()
+            month1 = get_items_fetchall("select * from listing_and_reviews where listing_id='" +
+                                        str(listing_id)+"' and scraping_date='" +
+                                        paire[0]+"' order by scraping_date, date")
         else:
             month1 = temp_month1
 
-        sql = "select * from listing_and_reviews where listing_id='" + \
-            str(listing_id)+"' and scraping_date='" + \
-            paire[1]+"' order by scraping_date, date"
-        c.execute(sql)
-        month2 = c.fetchall()
+        month2 = get_items_fetchall("select * from listing_and_reviews where listing_id='" +
+                                    str(listing_id)+"' and scraping_date='" +
+                                    paire[1]+"' order by scraping_date, date")
         temp_month1 = month2
 
         # On compte le nombre de jours réservés pour chaque fichier
@@ -137,8 +143,8 @@ for listing_id in listing_ids:  # pour chaque annonce
                     month2_reservations_liste.append(
                         (month2_reservationStarted_date, month2_reservationEnded_date))
 
-        # S'il n'y a pas de changements
         interpretation[listing_id][str(paire)] = {}
+        # S'il n'y a pas de changements
         if month1_reservations == month2_reservations:
             interpretation[listing_id][str(paire)]["Total"] = str(
                 month1_reservations)+" jours indisponibles"
@@ -159,11 +165,6 @@ for listing_id in listing_ids:  # pour chaque annonce
                 reservations += 1
             if dispo == 'f' and dispo2 == 't':
                 annulations += 1
-        # interpretation[listing_id][str(paire)]["Reservations"] = {
-        #     "nombre total de jours": reservations,
-        #     str(paire[0]): month1_reservations_liste,
-        #     str(paire[1]): month2_reservations_liste,
-        # }
         interpretation[listing_id][str(paire)]["Reservations"] = reservations
         interpretation[listing_id][str(paire)]["Annulations"] = annulations
 
@@ -175,6 +176,7 @@ for listing_id in listing_ids:  # pour chaque annonce
         i = j
         j += 1
 
+    #Remplissage du tableau synthese_periodes_indisponibles
     compteur_general = 1
     for scraping in tab_date:
         month_reservations = interpretation[listing_id]["Details"][str(
@@ -205,6 +207,7 @@ for listing_id in listing_ids:  # pour chaque annonce
                 if temp[date] != 0 and temp[date+1] != temp[date]:
                     compteur_general += 1
 
+    #Construction de la liste des périodes distinctes
     compteur_day = 0
     liste_periodes = []
     # Initialisation des compteurs (car on ne peut pas comparer à un jour précédent)
@@ -234,6 +237,7 @@ for listing_id in listing_ids:  # pour chaque annonce
         date_fin = datetime.date(year, month, num_days)
         liste_periodes.append((date_debut, date_fin))
 
+    # Liste périodes distinctes au format string pour l'affichage dans le JSON
     liste_periodes_string = []
     for periode in liste_periodes:
         liste_periodes_string.append((periode[0].strftime(
@@ -254,11 +258,9 @@ for listing_id in listing_ids:  # pour chaque annonce
     # Liaison avec les commentaires de l'annonce
     liaisons = {}
     if liste_periodes != [(datetime.date(year, month, 1), datetime.date(year, month, num_days))] and liste_periodes != []:
-        sql = "select * from listing_and_reviews where listing_id='" + \
-            str(listing_id)+"' and scraping_date = '" + \
-            str(tab_date[0])+"' and id not null order by date"
-        c.execute(sql)
-        commentaires = c.fetchall()
+        commentaires = get_items_fetchall("select * from listing_and_reviews where listing_id='" +
+                                          str(listing_id)+"' and scraping_date = '" +
+                                          str(tab_date[0])+"' and id not null order by date")
         # ETAPE 1 : commentaires dans les 15 jours après la réservation
         for periode in liste_periodes:
             liaisons[str(periode)] = {}
@@ -363,28 +365,32 @@ for listing_id in listing_ids:  # pour chaque annonce
                                         periode)][id]["pourcentage"] = nouveau_pourcentage
                                     if not continuer and nouveau_pourcentage == 50:
                                         continuer = True
-        #ETAPE INTERMEDIAIRE : Nettoyage commentaire à 50% tout seul
-        id_a_clean = []
-        for periode in liste_periodes:
-            # Pour chaque période, on cherche si on a un commentaire unique à 50%
-            for commentaire in liaisons[str(periode)]:
-                if liaisons[str(periode)][commentaire]["pourcentage"] == 50 and len(liaisons[str(periode)]) == 1:
-                    id_a_clean.append(commentaire)
-        # On cherche si un des commentaires trouvés apparaît une seule fois
-        for id in id_a_clean:
-            count = 0
+
+        def nettoyage_only50():
+            id_a_clean = []
             for periode in liste_periodes:
+                # Pour chaque période, on cherche si on a un commentaire unique à 50%
                 for commentaire in liaisons[str(periode)]:
-                    if commentaire == id:
-                        count += 1
-            if count == 1:
+                    if liaisons[str(periode)][commentaire]["pourcentage"] == 50 and len(liaisons[str(periode)]) == 1:
+                        id_a_clean.append(commentaire)
+            # On cherche si un des commentaires trouvés apparaît une seule fois
+            for id in id_a_clean:
+                count = 0
                 for periode in liste_periodes:
                     for commentaire in liaisons[str(periode)]:
                         if commentaire == id:
-                            liaisons[str(periode)
-                                     ][commentaire]["pourcentage"] = 100.0
+                            count += 1
+                if count == 1:
+                    for periode in liste_periodes:
+                        for commentaire in liaisons[str(periode)]:
+                            if commentaire == id:
+                                liaisons[str(periode)
+                                         ][commentaire]["pourcentage"] = 100.0
 
-        # Count nombre de commentaires à 100%
+        # ETAPE INTERMEDIAIRE : Nettoyage commentaire à 50% tout seul
+        nettoyage_only50()
+
+        # Count nombre de commentaires à 100% (avant l'étape 5 obligatoire)
         count_100percent = 0
         for periode in liste_periodes:
             # Pour chaque période, on cherche si un des commentaires est à 100%
@@ -410,46 +416,32 @@ for listing_id in listing_ids:  # pour chaque annonce
                         if id_a_conserver not in liste_id_a_conserver:
                             liste_id_a_conserver.append(id_a_conserver)
                         periode_du_com = str(periode)
-                        temp[commentaire]=liaisons[str(periode)][commentaire] #temp contient le commentaire à conserver dans la première période où il se trouve
-                        continuer = True      
-                    if id_a_conserver != None and commentaire != id_a_conserver and str(periode)!=periode_du_com:
-                        temp2[commentaire]=liaisons[str(periode)][commentaire] #temp2 contient les autres commentaires de cette période
+                        # temp contient le commentaire à conserver dans la première période où il se trouve
+                        temp[commentaire] = liaisons[str(periode)][commentaire]
+                        continuer = True
+                    if id_a_conserver != None and commentaire != id_a_conserver and str(periode) != periode_du_com:
+                        # temp2 contient les autres commentaires de cette période
+                        temp2[commentaire] = liaisons[str(
+                            periode)][commentaire]
                 if id_a_conserver != None:
                     if str(periode) == periode_du_com:
-                        liaisons[str(periode)]=temp
+                        liaisons[str(periode)] = temp
                     else:
-                        liaisons[str(periode)]=temp2
-            #Passage des commentaires maintenant uniques à 100%
-            id_a_clean = []
-            for periode in liste_periodes:
-                # Pour chaque période, on cherche si on a un commentaire unique à 50%
-                for commentaire in liaisons[str(periode)]:
-                    if liaisons[str(periode)][commentaire]["pourcentage"] == 50 and len(liaisons[str(periode)]) == 1:
-                        id_a_clean.append(commentaire)
-            # On cherche si un des commentaires trouvés apparaît une seule fois
-            for id in id_a_clean:
-                count = 0
-                for periode in liste_periodes:
-                    for commentaire in liaisons[str(periode)]:
-                        if commentaire == id:
-                            count += 1
-                if count == 1:
-                    for periode in liste_periodes:
-                        for commentaire in liaisons[str(periode)]:
-                            if commentaire == id:
-                                liaisons[str(periode)
-                                        ][commentaire]["pourcentage"] = 100.0
+                        liaisons[str(periode)] = temp2
+            # Passage des commentaires maintenant uniques à 100%
+            nettoyage_only50()
 
         if liste_id_a_conserver != []:
-            interpretation[listing_id]["Synthese"]["Nombre de periodes validees par le commentaire le plus proche"] = len(liste_id_a_conserver)+1
+            interpretation[listing_id]["Synthese"]["Nombre de periodes validees par le commentaire le plus proche"] = len(
+                liste_id_a_conserver)+1
 
         # Count periodes sans commentaires de moins de 21 jours
         count_sans_com = 0
         for periode in liste_periodes:
             # Pour chaque période, on cherche s'il n'y a pas de commentaire
             nb_jours = periode[1].day-periode[0].day
-            if len(liaisons[str(periode)])==0 and nb_jours < 21:
-                count_sans_com += 1        
+            if len(liaisons[str(periode)]) == 0 and nb_jours < 21:
+                count_sans_com += 1
         interpretation[listing_id]["Synthese"]["Nombre de periodes validees sans commentaires de moins de 21 jours"] = count_sans_com
 
     with open('liaisons_'+str(listing_id)+'.json', 'w') as outfile:
