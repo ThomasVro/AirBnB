@@ -4,15 +4,21 @@ import sqlite3
 import json
 import datetime
 import calendar
+
 year = 2018
-month = 5
-num_days = calendar.monthrange(year, month)[1]
-days = [datetime.date(year, month, day).strftime("%Y-%m-%d")
-        for day in range(1, num_days+1)]
+if calendar.isleap(year):
+    num_days = 366
+else:
+    num_days = 365
+
+days = []
+for month in range(1, 13):
+    nb = calendar.monthrange(year, month)[1]
+    days += [datetime.date(year, month, day).strftime("%Y-%m-%d")
+             for day in range(1, nb+1)]
 
 # liste des dates de scraping
-conn = sqlite3.connect('listing_and_reviews_10annonces.db')
-
+conn = sqlite3.connect('airbnb.db')
 
 def get_items_list(sql_request):
     c = conn.cursor()
@@ -28,11 +34,11 @@ def get_items_fetchall(sql_request):
 
 # Liste des dates de scraping
 tab_date = get_items_list(
-    "select distinct scraping_date from listing_and_reviews")
+    "select distinct scraping_date from listings")
 
 # Liste des annonces
 listing_ids = get_items_list(
-    "select distinct listing_id from listing_and_reviews order by listing_id")
+    "select distinct listing_id from listings order by listing_id")
 
 interpretation = {}
 for listing_id in listing_ids:  # pour chaque annonce
@@ -54,13 +60,13 @@ for listing_id in listing_ids:  # pour chaque annonce
 
         # On remplit chaque tableau avec les données des scrapings correspondant
         if temp_month1 == {}:
-            month1 = get_items_fetchall("select * from listing_and_reviews where listing_id='" +
+            month1 = get_items_fetchall("select * from listings where listing_id='" +
                                         str(listing_id)+"' and scraping_date='" +
                                         paire[0]+"' order by scraping_date, date")
         else:
             month1 = temp_month1
 
-        month2 = get_items_fetchall("select * from listing_and_reviews where listing_id='" +
+        month2 = get_items_fetchall("select * from listings where listing_id='" +
                                     str(listing_id)+"' and scraping_date='" +
                                     paire[1]+"' order by scraping_date, date")
         temp_month1 = month2
@@ -114,8 +120,6 @@ for listing_id in listing_ids:  # pour chaque annonce
                     count_reservations = 0
                     month1_reservations_liste.append(
                         (month1_reservationStarted_date, month1_reservationEnded_date))
-
-        count_reservations = 0
 
         for jour in month2:
             if jour[2] in days:
@@ -191,11 +195,21 @@ for listing_id in listing_ids:  # pour chaque annonce
 
         temp = [0]*num_days
         compteur = 0
+        #Pour chaque période, on remplit le tableau temporaire avec un nombre incrémenté à chaque période
         for periode in month_reservations_dates:
             compteur += 1
-            for i in range(periode[0].day, periode[1].day+1):
+            decalage0 = 0
+            decalage1 = 1
+            if periode[0].month != 1 :
+                for mois in range(1,periode[0].month):
+                    decalage0 += calendar.monthrange(year, mois)[1]
+            if periode[1].month != 1 :
+                for mois in range(1,periode[1].month):
+                    decalage1 += calendar.monthrange(year, mois)[1]
+            for i in range(periode[0].day+decalage0, periode[1].day+decalage1):
                 temp[i-1] = compteur
 
+        #Pour chaque jour, on analyse la différence (ou non) avec la synthèse des périodes indisponibles
         for date in range(num_days):
             # Réservation
             if synthese_periodes_indisponibles[date] == 0 and temp[date] != 0:
@@ -215,26 +229,44 @@ for listing_id in listing_ids:  # pour chaque annonce
         compteur_periodes = 0
         compteur_day = 0
     else:
-        date_debut = datetime.date(year, month, 1)
+        date_debut = datetime.date(year, 1, 1)
         compteur_periodes = 1
         compteur_day = 1
+    
+    liste_nb_days_per_month = []
+    increment = 0
+    for mois in range(1,13):
+        increment += calendar.monthrange(year, mois)[1]
+        liste_nb_days_per_month.append(increment)
     for i in range(1, num_days):
+        #On récupère le mois dans lequel est compris le i-ème jour de l'année
+        month = 0
+        for inc in liste_nb_days_per_month:
+            if i <= inc:
+                month = liste_nb_days_per_month.index(inc)+1
+                break
+
+        #On récupère le jour correspondant
+        day = i
+        for mois in range(1,month):
+                    day -= calendar.monthrange(year, mois)[1]
+
         if synthese_periodes_indisponibles[i] != synthese_periodes_indisponibles[i-1]:
             if synthese_periodes_indisponibles[i] != 0:
                 compteur_periodes += 1
             if synthese_periodes_indisponibles[i] != 0 and synthese_periodes_indisponibles[i-1] != 0:
-                date_fin = datetime.date(year, month, i)
+                date_fin = datetime.date(year, month, day)
                 liste_periodes.append((date_debut, date_fin))
-                date_debut = datetime.date(year, month, i+1)
+                date_debut = datetime.date(year, month, day+1)
             if synthese_periodes_indisponibles[i] == 0 and synthese_periodes_indisponibles[i-1] != 0:
-                date_fin = datetime.date(year, month, i)
+                date_fin = datetime.date(year, month, day)
                 liste_periodes.append((date_debut, date_fin))
             if synthese_periodes_indisponibles[i-1] == 0 and synthese_periodes_indisponibles[i] != 0:
-                date_debut = datetime.date(year, month, i+1)
+                date_debut = datetime.date(year, month, day+1)
         if synthese_periodes_indisponibles[i] != 0:
             compteur_day += 1
     if synthese_periodes_indisponibles[-1] != 0:
-        date_fin = datetime.date(year, month, num_days)
+        date_fin = datetime.date(year, 12, calendar.monthrange(year, 12)[1])
         liste_periodes.append((date_debut, date_fin))
 
     # Liste périodes distinctes au format string pour l'affichage dans le JSON
@@ -242,7 +274,7 @@ for listing_id in listing_ids:  # pour chaque annonce
     for periode in liste_periodes:
         liste_periodes_string.append((periode[0].strftime(
             "%Y-%m-%d"), periode[1].strftime("%Y-%m-%d")))
-    if liste_periodes != [(datetime.date(year, month, 1), datetime.date(year, month, num_days))]:
+    if liste_periodes != [(datetime.date(year, 1, 1), datetime.date(year, 12, calendar.monthrange(year, 12)[1]))]:
         interpretation[listing_id]["Synthese"] = {
             "Jours indisponibles": compteur_day,
             "Nombre de reservations distinctes": compteur_periodes,
@@ -254,13 +286,12 @@ for listing_id in listing_ids:  # pour chaque annonce
             interpretation[listing_id]["Synthese"] = "Le proprietaire a ferme tout le mois."
         if compteur_day == 0:
             interpretation[listing_id]["Synthese"] = "Le proprietaire n'a pas eu de reservations."
-
+    
     # Liaison avec les commentaires de l'annonce
     liaisons = {}
-    if liste_periodes != [(datetime.date(year, month, 1), datetime.date(year, month, num_days))] and liste_periodes != []:
-        commentaires = get_items_fetchall("select * from listing_and_reviews where listing_id='" +
-                                          str(listing_id)+"' and scraping_date = '" +
-                                          str(tab_date[0])+"' and id not null order by date")
+    if liste_periodes != [(datetime.date(year, 1, 1), datetime.date(year, 12, calendar.monthrange(year, 12)[1]))] and liste_periodes != []:
+        commentaires = get_items_fetchall("select * from reviews_2019 where listing_id='" +
+                                          str(listing_id)+"' and id not null order by date")
         # ETAPE 1 : commentaires dans les 15 jours après la réservation
         for periode in liste_periodes:
             liaisons[str(periode)] = {}
@@ -270,9 +301,9 @@ for listing_id in listing_ids:  # pour chaque annonce
                 if periode[1] < date_du_commentaire and periode[1] > date_du_commentaire-datetime.timedelta(days=14):
                     liaisons[str(periode)][commentaire[4]] = {
                         "date": commentaire[2],
-                        "reviewer_id": commentaire[5],
-                        "reviewer_name": commentaire[6],
-                        "contenu": commentaire[7]
+                        "reviewer_id": commentaire[3],
+                        "reviewer_name": commentaire[4],
+                        "contenu": commentaire[5]
                     }
         # ETAPE 2 : compter le nombre de réservations qui se sont terminées 15 jours max avant chaque commentaire
         # Pour déterminer le pourcentage de chance qu'un commentaire corresponde à une résa.
@@ -283,11 +314,12 @@ for listing_id in listing_ids:  # pour chaque annonce
             for periode in liste_periodes:
                 if periode[1] < date_du_commentaire and periode[1] > date_du_commentaire-datetime.timedelta(days=14):
                     nb_resa += 1
-            for periode in liaisons:
-                if commentaire[4] in liaisons[str(periode)]:
-                    pourcentage = (1/nb_resa)*100
-                    liaisons[str(periode)][commentaire[4]
-                                           ]["pourcentage"] = (1/nb_resa)*100
+            if nb_resa > 0:
+                for periode in liaisons:
+                    if commentaire[4] in liaisons[str(periode)]:
+                        pourcentage = (1/nb_resa)*100
+                        liaisons[str(periode)][commentaire[4]
+                                            ]["pourcentage"] = (1/nb_resa)*100
         # ETAPE 3 : retirer les commentaires de moins de 100% pour une réservation qui a déjà un commentaire à 100%
         continuer = True
         while continuer:
