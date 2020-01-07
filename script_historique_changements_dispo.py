@@ -82,7 +82,7 @@ for month in range(1, 13):
             month2 = get_items_fetchall("select * from "+constants.LISTINGS+" where listing_id='" +
                                         str(listing_id)+"' and scraping_date='" +
                                         paire[1]+"' order by scraping_date, date")
-            temp_month1 = month2
+            temp_month1 = month2            
 
             # On compte le nombre de jours réservés pour chaque fichier
             month1_reservations = 0
