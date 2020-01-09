@@ -35,6 +35,7 @@ for id in listing_ids:
     for scraping_date in scraping_dates:
         scraping = get_items_fetchall("select scraping_date,availability,min(date) from "+constants.LISTINGS+" where listing_id = '"+str(id)+"' and scraping_date ='"+str(scraping_date)+"'")[0]
         starting_date = datetime.datetime.strptime(scraping[2],"%Y-%m-%d")
+        rows_to_add = []#Va contenir les données manquantes que l'on va insérer en bdd
         if starting_date != mandatory_starting_date:            
             #Si la date de début du fichier de scraping est après la date obligatoire
             #On doit combler avec les data du dernier fichier de scraping qui contient les données manquantes
@@ -51,7 +52,7 @@ for id in listing_ids:
 
             #On va compléter le fichier de scraping avec les données du fichier du mois d'avant
             previous_scraping = get_items_fetchall("select * from "+constants.LISTINGS+" where listing_id = '"+str(id)+"' and scraping_date ='"+str(previous_scraping_date)+"' order by date")
-            rows_to_add = []#Va contenir les données manquantes que l'on va insérer en bdd
+            
             for s in previous_scraping:
                 date = datetime.datetime.strptime(s[2],"%Y-%m-%d")
                 if date < starting_date:

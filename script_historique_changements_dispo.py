@@ -28,7 +28,7 @@ listing_ids = get_items_list(
 
 # Liste des dates de scraping
 tab_date = get_items_list(
-    "select distinct scraping_date from "+constants.LISTINGS)
+    "select distinct scraping_date from "+constants.LISTINGS+" order by scraping_date")
 
 periodes_indispo_annee = {}
 for listing_id in listing_ids:
@@ -82,7 +82,7 @@ for month in range(1, 13):
             month2 = get_items_fetchall("select * from "+constants.LISTINGS+" where listing_id='" +
                                         str(listing_id)+"' and scraping_date='" +
                                         paire[1]+"' order by scraping_date, date")
-            temp_month1 = month2            
+            temp_month1 = month2   
 
             # On compte le nombre de jours réservés pour chaque fichier
             month1_reservations = 0
@@ -108,6 +108,7 @@ for month in range(1, 13):
 
             count_reservations = 0
 
+            #On génère les listes des périodes indisponibles pour les 2 mois de scraping comparés (selon les jours fermé sur le calendrier)
             for jour in month1:
                 if jour[2] in days:
                     dispo = jour[3]
@@ -133,7 +134,6 @@ for month in range(1, 13):
                         count_reservations = 0
                         month1_reservations_liste.append(
                             (month1_reservationStarted_date, month1_reservationEnded_date))
-
             count_reservations = 0
 
             for jour in month2:
@@ -162,6 +162,7 @@ for month in range(1, 13):
                         month2_reservations_liste.append(
                             (month2_reservationStarted_date, month2_reservationEnded_date))
 
+            #On remplit le dictionnaire interpetation pour la comparaison des deux fichiers de scraping
             interpretation[listing_id][str(paire)] = {}
             # S'il n'y a pas de changements
             if month1_reservations == month2_reservations:
@@ -257,6 +258,7 @@ for month in range(1, 13):
             date_fin = datetime.date(year, month, num_days)
             liste_periodes.append((date_debut, date_fin))
 
+        #On ajoute les périodes indispo du mois dans la liste des périodes indispo pour toute l'année
         for periode in liste_periodes:
             periodes_indispo_annee[listing_id].append(periode)
 
@@ -434,7 +436,7 @@ for listing_id in listing_ids:
 
         # ETAPE 5 : Entre deux commentaires à 50% (ou 33%, 25%, etc.) pour une période, on garde le commentaire le plus proche en date donc le premier
         count_closest = 0
-        for x in range(2, 5):
+        for x in range(2, 6):
             pourcentage = (1/x)*100
             continuer = True
             liste_id_a_conserver = []
