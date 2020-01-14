@@ -4,6 +4,9 @@ from functools import reduce
 import numpy as np
 import constants
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
+
+start = time.time()
 
 conn = sqlite3.connect('airbnb.db')
 c = conn.cursor()
@@ -49,34 +52,46 @@ c.execute(sql)
 ids = [x[0] for x in c.fetchall()]
 
 def thread_insert(rows):
-    mydb = mysql.connector.connect(
+    connection = mysql.connector.connect(
         host="127.0.0.1",
         port=3306,
         user="root",
         passwd="root",
         db='airbnb'
     )
-    c_mysql = mydb.cursor()
+    cursor = connection.cursor()
     sql_insert_query = 'INSERT INTO calendars_2018 (listing_id, scraping_date, date, availability ) VALUES (%s,%s,%s,%s)'
-    c_mysql.executemany(sql_insert_query,rows)
-    mydb.commit()    
-    print(c_mysql.rowcount,"records inserted")
-    c_mysql.close()
+    cursor.executemany(sql_insert_query,rows)
+
+    connection.commit()    
+    print(rows[0][1],"-",cursor.rowcount,"records inserted\n")
+
+    cursor.close()
+    connection.close()
 
 def insert_rows(scraping_date):
     thread_conn = sqlite3.connect('airbnb.db')
     thread_c = thread_conn.cursor()
+
     res = []
     print("Récupération des données de SQLite")
     sql = "select listing_id,'"+scraping_date+"', date, available from `" + scraping_date + "` where listing_id in common_ids and date like '2018-%'"        
     thread_c.execute(sql)
     res = thread_c.fetchall()
     print(len(res),"lignes à insérer")
+
+    print("Temps écoulé :", time.time()-start,"secondes")
+
     print("Insertion dans la bdd MySQL")
-    n=1000
-    fragmented_res = [res[i * n:(i + 1) * n] for i in range((len(res) + n - 1) // n )]
-    with ThreadPoolExecutor(max_workers = 100) as executor:
+    n=600
+    # fragmented_res = [res[i * n:(i + 1) * n] for i in range((len(res) + n - 1) // n )]
+    fragmented_res = [res[x:x+n] for x in range(0, len(res), n)]
+    with ThreadPoolExecutor(max_workers = 120) as executor:
         futures = executor.map(thread_insert, fragmented_res)
+
+    for f in as_completed(futures):
+        f.result()
+
     thread_c.close()
     
 
@@ -91,6 +106,7 @@ tab_date = get_items_list(
 for scraping_date in tab_date:
     print(scraping_date)
     insert_rows(scraping_date)
+    print("Temps écoulé :", time.time()-start,"secondes")
     print()
 
 
