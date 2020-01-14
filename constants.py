@@ -1,3 +1,4 @@
 LISTINGS = "listings"
-REVIEWS = "reviews_2019"
+REVIEWS = "reviews"
 YEAR = 2018
+SCRAPING_DATES = "scraping_dates"
