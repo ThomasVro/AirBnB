@@ -1,10 +1,11 @@
 import sqlite3
-import mysql.connector
+import pymysql.cursors
 from functools import reduce
 import numpy as np
 import constants
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
+from tqdm import tqdm
 
 start = time.time()
 
@@ -15,6 +16,74 @@ def querry_listing_id(querry):
     c.execute(querry)
     tab = [x[0] for x in c.fetchall()]
     return tab
+
+sql = "select listing_id from common_ids"
+c.execute(sql)
+ids = [x[0] for x in c.fetchall()]
+
+def thread_insert(rows):
+    inserted_rows=0
+    try:
+        connection = pymysql.connect(
+            host="127.0.0.1",
+            port=3306,
+            user="root",
+            password="root",
+            db='airbnb'
+        )
+        cursor = connection.cursor()
+        sql_insert_query = 'INSERT INTO calendars_2018 (listing_id, scraping_date, date, availability) VALUES (%s,%s,%s,%s)'
+        inserted_rows = cursor.executemany(sql_insert_query,rows)
+
+        connection.commit()    
+    except Exception as e:
+        print(e)
+    finally:
+        cursor.close()
+        connection.close()        
+        return inserted_rows
+
+def insert_rows(scraping_date):
+    thread_conn = sqlite3.connect('airbnb.db')
+    thread_c = thread_conn.cursor()
+
+    res = []
+    print("Récupération des données de SQLite")
+    sql = "select listing_id,'"+scraping_date+"', date, available from `" + scraping_date + "` where listing_id in common_ids and date like '2018-%'"        
+    thread_c.execute(sql)
+    res = thread_c.fetchall()
+    print(len(res),"lignes à insérer")
+
+    print("Temps écoulé :", time.time()-start,"secondes")
+
+    print("Insertion dans la bdd MySQL")
+    n=1000
+    fragmented_res = [res[x:x+n] for x in range(0, len(res), n)]
+    with ThreadPoolExecutor(max_workers = 130) as executor:
+        results = list(tqdm(executor.map(thread_insert, fragmented_res),total=len(fragmented_res)))
+
+    inserted_rows = 0
+    for r in results:
+       inserted_rows+=r
+    print(scraping_date,"-",inserted_rows,"lignes insérées")
+
+    thread_c.close()
+    
+
+def get_items_list(sql_request):
+    c = conn.cursor()
+    c.execute(sql_request)
+    return [x[0] for x in c.fetchall()]
+
+tab_date = get_items_list(
+    "select distinct scraping_date from "+constants.SCRAPING_DATES+" order by scraping_date")
+
+for scraping_date in tab_date:
+    print(scraping_date)
+    insert_rows(scraping_date)
+    print("Temps écoulé :", time.time()-start,"secondes")
+    print()
+
 
 #tab1 = querry_listing_id("select distinct listing_id from '2017-02'")
 #tab2= querry_listing_id("select distinct listing_id from '2017-03'")
@@ -46,68 +115,6 @@ def querry_listing_id(querry):
 #    f.write(str(id) + "," +"\n")
 
 #scraping = ['2017-02', '2017-03', '2017-04', '2017-05', '2017-06', '2017-07', '2017-08', '2017-09', '2017-10', '2017-11', '2017-12', '2018-01','2018-03', '2018-04', '2018-05', '2018-06', '2018-07', '2018-08', '2018-09', '2018-10', '2018-11', '2018-12']
-
-sql = "select listing_id from common_ids"
-c.execute(sql)
-ids = [x[0] for x in c.fetchall()]
-
-def thread_insert(rows):
-    connection = mysql.connector.connect(
-        host="127.0.0.1",
-        port=3306,
-        user="root",
-        passwd="root",
-        db='airbnb'
-    )
-    cursor = connection.cursor()
-    sql_insert_query = 'INSERT INTO calendars_2018 (listing_id, scraping_date, date, availability ) VALUES (%s,%s,%s,%s)'
-    cursor.executemany(sql_insert_query,rows)
-
-    connection.commit()    
-    print(rows[0][1],"-",cursor.rowcount,"records inserted\n")
-
-    cursor.close()
-    connection.close()
-
-def insert_rows(scraping_date):
-    thread_conn = sqlite3.connect('airbnb.db')
-    thread_c = thread_conn.cursor()
-
-    res = []
-    print("Récupération des données de SQLite")
-    sql = "select listing_id,'"+scraping_date+"', date, available from `" + scraping_date + "` where listing_id in common_ids and date like '2018-%'"        
-    thread_c.execute(sql)
-    res = thread_c.fetchall()
-    print(len(res),"lignes à insérer")
-
-    print("Temps écoulé :", time.time()-start,"secondes")
-
-    print("Insertion dans la bdd MySQL")
-    n=600
-    # fragmented_res = [res[i * n:(i + 1) * n] for i in range((len(res) + n - 1) // n )]
-    fragmented_res = [res[x:x+n] for x in range(0, len(res), n)]
-    with ThreadPoolExecutor(max_workers = 120) as executor:
-        futures = executor.map(thread_insert, fragmented_res)
-
-    for f in as_completed(futures):
-        f.result()
-
-    thread_c.close()
-    
-
-def get_items_list(sql_request):
-    c = conn.cursor()
-    c.execute(sql_request)
-    return [x[0] for x in c.fetchall()]
-
-tab_date = get_items_list(
-    "select distinct scraping_date from "+constants.SCRAPING_DATES+" order by scraping_date")
-
-for scraping_date in tab_date:
-    print(scraping_date)
-    insert_rows(scraping_date)
-    print("Temps écoulé :", time.time()-start,"secondes")
-    print()
 
 
 # conn = sqlite3.connect('AirBnB.db')

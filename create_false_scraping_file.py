@@ -1,77 +1,67 @@
 import constants
-import sqlite3
-import mysql.connector
+import pymysql.cursors
 import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from tqdm import tqdm
 
-conn = sqlite3.connect('airbnb.db')
-
-
+connection = pymysql.connect(
+            host="127.0.0.1",
+            port=3306,
+            user="root",
+            password="root",
+            db='airbnb'
+        )
+cursor = connection.cursor()   
 
 def get_items_list(sql_request):
-    c = conn.cursor()
-    c.execute(sql_request)
-    return [x[0] for x in c.fetchall()]
-
-
-def get_items_fetchall(sql_request):
-    c = conn.cursor()
-    c.execute(sql_request)
-    return c.fetchall()
-
-#Nous allons dupliquer le fichier de scraping du mois de janvier 2018 pour créer un faux fichier de scraping du mois de février 2018
-year = constants.YEAR
-month = 2
-
-scraping_date = str(year)+'-'+(str(month-1) if month>9 else '0'+str(month-1))
-new_scraping_date = str(year)+'-'+(str(month) if month>9 else '0'+str(month))
+    cursor.execute(sql_request)
+    return [x[0] for x in cursor.fetchall()]
 
 # Liste des annonces
 listing_ids = get_items_list(
-    "select distinct listing_id from "+constants.COMMON_IDS+" order by listing_id")
+    "select distinct listing_id from "+constants.CALENDARS)
 
-# for id in listing_ids:
-#     print(id)
-#     scraping_date = str(year)+'-'+(str(month-1) if month>9 else '0'+str(month-1))
-#     new_scraping_date = str(year)+'-'+(str(month) if month>9 else '0'+str(month))
-#     sql_select = "select * from "+constants.CALENDAR+" where listing_id = '"+str(id)+"' and scraping_date ='"+str(scraping_date)+"' order by date"
-#     c_mysql.execute(sql_select)
-#     scraping = c_mysql.fetchall()
-#     rows_to_add = []
-#     for s in scraping:
-#         value = (s[0],new_scraping_date,s[2],s[3])
-#         rows_to_add.append(value)
 
-#     #On insère les lignes dans la bdd
-#     sql_insert = "insert into "+constants.CALENDAR+" (listing_id,scraping_date,date,availability) values (%s,%s,%s,%s)"
-#     c_mysql.executemany(sql_insert,rows_to_add)
-#     mydb.commit()    
-#     print(c_mysql.rowcount,"records inserted")
-#     c_mysql.close()
+def create_false_scraping_file(year,month):
+    scraping_date = str(year)+'-'+(str(month-1) if month>9 else '0'+str(month-1))
+    new_scraping_date = str(year)+'-'+(str(month) if month>9 else '0'+str(month))
 
-def thread_insert(id):
-    mydb = mysql.connector.connect(
-        host="127.0.0.1",
-        port=3306,
-        user="root",
-        passwd="root",
-        db='airbnb'
-    )
-    c_mysql = mydb.cursor()    
+    def thread_insert(id):
+        try:
+            connection = pymysql.connect(
+                    host="127.0.0.1",
+                    port=3306,
+                    user="root",
+                    password="root",
+                    db='airbnb'
+                )
+            cursor = connection.cursor()    
 
-    sql_select = "select listing_id,'"+new_scraping_date+"', date,availability from "+constants.CALENDARS+" where listing_id = '"+str(id)+"' and scraping_date ='"+str(scraping_date)+"' order by date"
-    c_mysql.execute(sql_select)
-    rows_to_add = c_mysql.fetchall()
-    print(id,len(rows_to_add),"rows to insert")
+            sql_select = "select listing_id,'"+new_scraping_date+"', date,availability from "+constants.CALENDARS+" where listing_id = '"+str(id)+"' and scraping_date ='"+str(scraping_date)+"' order by date"
+            cursor.execute(sql_select)
+            rows_to_add = cursor.fetchall()
 
-    #On insère les lignes dans la bdd
-    # sql_insert = "insert into "+constants.CALENDARS+" (listing_id,scraping_date,date,availability) values (%s,%s,%s,%s)"
-    # c_mysql.executemany(sql_insert,rows_to_add)
-    # mydb.commit()    
-    # print(c_mysql.rowcount,"records inserted")
-    # c_mysql.close()
+            #On insère les lignes dans la bdd
+            sql_insert = "insert into "+constants.CALENDARS+" (listing_id,scraping_date,date,availability) values (%s,%s,%s,%s)"
+            inserted_rows=cursor.executemany(sql_insert,rows_to_add)
+            connection.commit()    
+        except Exception as e:
+            print(e)
+        finally:
+            cursor.close()
+            connection.close()        
+            return (id,inserted_rows) 
 
-with ThreadPoolExecutor(max_workers = 150) as executor:
-        futures = executor.map(thread_insert, listing_ids)
 
-conn.close()
+    print("Insertion des lignes pour",new_scraping_date)
+    with ThreadPoolExecutor(max_workers = 130) as executor:
+        results = list(tqdm(executor.map(thread_insert, listing_ids),total=len(listing_ids)))
+
+    for r in results:
+        print(scraping_date,"-",r[0],",",r[1],"lignes insérées")
+
+#Nous allons dupliquer le fichier de scraping du mois de janvier 2018 pour créer un faux fichier de scraping du mois de février 2018
+create_false_scraping_file(constants.YEAR,2)
+
+cursor.close()
+connection.close()

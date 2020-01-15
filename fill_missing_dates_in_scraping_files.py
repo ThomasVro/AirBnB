@@ -1,38 +1,63 @@
 import constants
-import sqlite3
 import datetime
+import pymysql.cursors
 
-conn = sqlite3.connect('airbnb.db')
+connection = pymysql.connect(
+            host="127.0.0.1",
+            port=3306,
+            user="root",
+            password="root",
+            db='airbnb'
+        )
+cursor = connection.cursor()   
 
 def get_items_list(sql_request):
-    c = conn.cursor()
-    c.execute(sql_request)
-    return [x[0] for x in c.fetchall()]
-
+    cursor.execute(sql_request)
+    return [x[0] for x in cursor.fetchall()]
 
 def get_items_fetchall(sql_request):
-    c = conn.cursor()
-    c.execute(sql_request)
-    return c.fetchall()
-
+    cursor.execute(sql_request)
+    return cursor.fetchall()
 
 year = constants.YEAR
 
 # Liste des annonces
 listing_ids = get_items_list(
-    "select distinct listing_id from "+constants.LISTINGS+" order by listing_id")
+    "select distinct listing_id from "+constants.CALENDARS)
 
 # Liste des dates de scraping
 scraping_dates = get_items_list(
-    "select distinct scraping_date from "+constants.LISTINGS)
+    "select distinct scraping_date from "+constants.CALENDARS)
 
 #Les fichiers de scraping commencent à partir de la date à laquelle ils ont été récupéré.
 #Nous récupérons les données du fichier de scraping précédent qui commence à la bonne date, en supposant que les données n'ont pas changé
 mandatory_starting_date = datetime.datetime(year,1,1)#On veut que tous les fichiers de scraping commencent à cette date
 
+def thread_insert(id):
+    inserted_rows=0
+    try:
+        thread_connection = pymysql.connect(
+                host="127.0.0.1",
+                port=3306,
+                user="root",
+                password="root",
+                db='airbnb'
+            )
+        thread_cursor = connection.cursor()
+        #On insère les lignes dans la bdd
+        sql_insert = "insert into "+constants.CALENDARS+" (listing_id,scraping_date,date,availability) values (%s,%s,%s,%s)"
+        inserted_rows=thread_cursor.executemany(sql_insert,rows_to_add)
+        thread_connection.commit()    
+    except Exception as e:
+        print(e)
+    finally:
+        thread_cursor.close()
+        thread_connection.close()        
+        return inserted_rows
+
 for id in listing_ids:
-    print(id)
     for scraping_date in scraping_dates:
+        print(id,scraping_date)
         scraping = get_items_fetchall("select scraping_date,availability,min(date) from "+constants.LISTINGS+" where listing_id = '"+str(id)+"' and scraping_date ='"+str(scraping_date)+"'")[0]
         starting_date = datetime.datetime.strptime(scraping[2],"%Y-%m-%d")
         rows_to_add = []#Va contenir les données manquantes que l'on va insérer en bdd
@@ -60,10 +85,13 @@ for id in listing_ids:
                     rows_to_add.append(value)
 
             #On insère les lignes dans la bdd
-            c=conn.cursor()
-            for row in rows_to_add:
-                sql_insert = "insert into "+constants.LISTINGS+" (listing_id,scraping_date,date,availability) values "+str(row)
-                c.execute(sql_insert)
+            print("Insertion des lignes pour",new_scraping_date)
+            with ThreadPoolExecutor(max_workers = 130) as executor:
+                results = list(tqdm(executor.map(thread_insert, rows_to_add),total=len(rows_to_add)))
+
+            for r in results:
+                print(scraping_date,"-",id,r,"lignes insérées")
 
 conn.commit()
-conn.close()
+cursor.close()
+connection.close()
