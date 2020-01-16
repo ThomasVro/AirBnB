@@ -1,7 +1,7 @@
 import constants
 import pymysql.cursors
 import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 
 connection = pymysql.connect(
