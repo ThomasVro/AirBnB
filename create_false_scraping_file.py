@@ -1,6 +1,5 @@
 import constants
 import pymysql.cursors
-import datetime
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 

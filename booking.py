@@ -1,5 +1,9 @@
 import json
 import sqlite3
+import constants
+import pymysql.cursors
+from concurrent.futures import ThreadPoolExecutor
+from tqdm import tqdm
 
 dict_months = {
     "janvier": "01",
@@ -16,19 +20,19 @@ dict_months = {
     "décembre": "12"
 }
 
-f = open("booking_comments.txt","w+")
-with open('booking.txt') as json_file:
+values = []
+id = 0
+with open('booking.txt', encoding='utf-8') as json_file:
     data = json.load(json_file)
     for d in data:
         conn = sqlite3.connect('AirBnB.db')
         c = conn.cursor()
-        sql = "select listing_id from links where booking =" + "'" + str(d['id']) + "'"
+        sql = "select listing_id from "+constants.LINKS_BOOKING_SQLITE + \
+            " where booking =" + "'" + str(d['id']) + "'"
         c.execute(sql)
-        tab =[x[0] for x in c.fetchall()]
-        if len(tab) > 0 :
+        tab = [x[0] for x in c.fetchall()]
+        if len(tab) > 0:
             listing_id = tab[0]
-            print(listing_id)
-            print("---------")
             for elt in d['dates']:
                 if len(elt) > 20:
                     elt = elt.replace("Commentaire envoyé le ", '')
@@ -40,17 +44,40 @@ with open('booking.txt') as json_file:
 
                     months = dict_months[t[1]]
                     year = t[2]
-                    format_date = year + "-" + months + "-" + day
+                    format_date = year + "-" + months + "-" + day    
 
-                    line = str(listing_id) + "," + "" + "," + str(format_date) + "," + "" + "," + "" + "," + "Comment from Booking" 
-                    f.write(line + "\n")
-                    
-        print(" ")
+                    values.append((str(listing_id),str(format_date),"B"+str(id),"Comment from Booking.com"))
+                    id+=1
 
-    
-      
+def thread_insert(rows):
+    inserted_rows=0
+    try:
+        connection = pymysql.connect(
+            host="127.0.0.1",
+            port=3306,
+            user="root",
+            password="root",
+            db='airbnb'
+        )
+        cursor = connection.cursor()
+        sql_insert_query = "INSERT INTO "+constants.BOOKING_COMMENTS+" (listing_id, date, reviewer_id,comments) VALUES (%s,%s,%s,%s)"
+        inserted_rows = cursor.executemany(sql_insert_query,rows)
 
-       
+        connection.commit()    
+    except Exception as e:
+        print(e)
+    finally:
+        cursor.close()
+        connection.close()        
+        return inserted_rows
 
-        
-        
+print("Insertion dans la bdd MySQL")
+n=1000
+fragmented_res = [values[x:x+n] for x in range(0, len(values), n)]
+with ThreadPoolExecutor(max_workers = 130) as executor:
+    results = list(tqdm(executor.map(thread_insert, fragmented_res),total=len(fragmented_res)))
+
+inserted_rows = 0
+for r in results:
+    inserted_rows+=r
+print(inserted_rows,"lignes insérées")

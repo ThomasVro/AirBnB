@@ -12,10 +12,6 @@ start = time.time()
 conn = sqlite3.connect('airbnb.db')
 c = conn.cursor()
 
-sql = "select listing_id from common_ids"
-c.execute(sql)
-ids = [x[0] for x in c.fetchall()]
-
 def thread_insert(rows):
     inserted_rows=0
     try:
@@ -27,7 +23,7 @@ def thread_insert(rows):
             db='airbnb'
         )
         cursor = connection.cursor()
-        sql_insert_query = 'INSERT INTO calendars_2018 (listing_id, scraping_date, date, availability) VALUES (%s,%s,%s,%s)'
+        sql_insert_query = "INSERT INTO "+constants.CALENDARS+" (listing_id, scraping_date, date, availability) VALUES (%s,%s,%s,%s)"
         inserted_rows = cursor.executemany(sql_insert_query,rows)
 
         connection.commit()    
@@ -44,7 +40,7 @@ def insert_rows(scraping_date):
 
     res = []
     print("Récupération des données de SQLite")
-    sql = "select listing_id,'"+scraping_date+"', date, available from `" + scraping_date + "` where listing_id in common_ids and date like '2018-%'"        
+    sql = "select listing_id,'"+scraping_date+"', date, available from `" + scraping_date + "` where listing_id in common_ids and date like '"+str(constants.YEAR)+"-%'"        
     thread_c.execute(sql)
     res = thread_c.fetchall()
     print(len(res),"lignes à insérer")

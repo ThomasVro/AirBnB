@@ -41,47 +41,6 @@ def get_items_fetchall(sql_request):
     return cursor.fetchall()
 
 
-def liste_periodes_indispo(month):
-    count_reservations = 0
-    month_dispos = []
-    month_reservations_liste = []
-    month_reservations_count = 0
-    month_reservationStarted = False
-    month_reservationEnded = False
-    month_reservationStarted_date = ""
-    month_reservationEnded_date = ""
-    for jour in month:
-        if jour[2] in days:
-            dispo = jour[3]
-            month_dispos.append(dispo)
-            if dispo == 'f':
-                # Si indisponible et qu'il n'y a pas encore eu de réservations comptés
-                if count_reservations == 0:
-                    month_reservationStarted = True
-                    month_reservationEnded = False
-                    month_reservationStarted_date = jour[2]
-                if month_reservationStarted:
-                    count_reservations += 1
-                # Si le jour est indispo et que c'est le dernier du mois, on termine la période d'indisponibilité
-                if str(jour[2]) == days[-1] and month_reservationStarted:
-                    count_reservations = 0
-                    month_reservations_liste.append(
-                        (month_reservationStarted_date, days[-1]))
-                month_reservations_count += 1
-            # Si le jour est disponible mais qu'on était déjà dans une période indisponible, on termine la période d'indisponibilité
-            if dispo == 't' and month_reservationStarted:
-                month_reservationStarted = False
-                month_reservationEnded = True
-                month_reservationEnded_date = month[month.index(
-                    jour)-1][2]
-            # Si on est plus dans une période d'indisponibilité et que la période calculée n'est pas dans la liste
-            if month_reservationEnded and (month_reservationStarted_date, month_reservationEnded_date) not in month_reservations_liste:
-                count_reservations = 0
-                month_reservations_liste.append(
-                    (month_reservationStarted_date, month_reservationEnded_date))
-    return month_reservations_count,month_dispos, month_reservations_liste
-
-
 lock = Lock()
 
 year = constants.YEAR
@@ -142,25 +101,64 @@ for month in range(1, 13):
 
             # On remplit chaque tableau avec les données des scrapings correspondant
             if temp_month1 == {}:
-                month1 = get_items_fetchall("select * from "+constants.AIRBNB+" where listing_id=" +
+                month1 = get_items_fetchall("select listing_id,scraping_date,date,availability,reviewer_id,reviewer_name,comments from "+constants.AIRBNB+" where listing_id=" +
                                             str(listing_id)+" and scraping_date='" +
                                             paire[0]+"' order by scraping_date, date")
             else:
                 month1 = temp_month1
 
-            month2 = get_items_fetchall("select * from "+constants.AIRBNB+" where listing_id=" +
+            month2 = get_items_fetchall("select listing_id,scraping_date,date,availability,reviewer_id,reviewer_name,comments from "+constants.AIRBNB+" where listing_id=" +
                                         str(listing_id)+" and scraping_date='" +
                                         paire[1]+"' order by scraping_date, date")
             temp_month1 = month2
 
             # On génère les listes des périodes indisponibles pour les 2 mois de scraping comparés (selon les jours fermé sur le calendrier)
+            def liste_periodes_indispo(month):
+                count_reservations = 0
+                month_dispos = []
+                month_reservations_liste = []
+                month_reservations_count = 0
+                month_reservationStarted = False
+                month_reservationEnded = False
+                month_reservationStarted_date = ""
+                month_reservationEnded_date = ""
+                for jour in month:
+                    if jour[2] in days:
+                        dispo = jour[3]
+                        month_dispos.append(dispo)
+                        if dispo == 'f':
+                            # Si indisponible et qu'il n'y a pas encore eu de réservations comptés
+                            if count_reservations == 0:
+                                month_reservationStarted = True
+                                month_reservationEnded = False
+                                month_reservationStarted_date = jour[2]
+                            if month_reservationStarted:
+                                count_reservations += 1
+                            # Si le jour est indispo et que c'est le dernier du mois, on termine la période d'indisponibilité
+                            if str(jour[2]) == days[-1] and month_reservationStarted:
+                                count_reservations = 0
+                                month_reservations_liste.append(
+                                    (month_reservationStarted_date, days[-1]))
+                            month_reservations_count += 1
+                        # Si le jour est disponible mais qu'on était déjà dans une période indisponible, on termine la période d'indisponibilité
+                        if dispo == 't' and month_reservationStarted:
+                            month_reservationStarted = False
+                            month_reservationEnded = True
+                            month_reservationEnded_date = month[month.index(
+                                jour)-1][2]
+                        # Si on est plus dans une période d'indisponibilité et que la période calculée n'est pas dans la liste
+                        if month_reservationEnded and (month_reservationStarted_date, month_reservationEnded_date) not in month_reservations_liste:
+                            count_reservations = 0
+                            month_reservations_liste.append(
+                                (month_reservationStarted_date, month_reservationEnded_date))
+                return month_reservations_count, month_dispos, month_reservations_liste
             month1_dispos = []
             month2_dispos = []
             month1_reservations_liste = []
-            month2_reservations_liste = []            
-            month1_reservations,month1_dispos, month1_reservations_liste = liste_periodes_indispo(
+            month2_reservations_liste = []
+            month1_reservations, month1_dispos, month1_reservations_liste = liste_periodes_indispo(
                 month1)
-            month2_reservations,month2_dispos, month2_reservations_liste = liste_periodes_indispo(
+            month2_reservations, month2_dispos, month2_reservations_liste = liste_periodes_indispo(
                 month2)
 
             # On remplit le dictionnaire interpetation pour la comparaison des deux fichiers de scraping
@@ -301,12 +299,12 @@ for month in range(1, 13):
                 interpretation[listing_id]["Synthese"] = "Le proprietaire n'a pas eu de reservations."
                 lock.release()
 
-    print("Mois",month,"- Remplissage de l'interprétation des calendriers")
+    print("Mois", month, "- Remplissage de l'interprétation des calendriers")
     with ThreadPoolExecutor(max_workers=130) as executor:
         results = list(
             tqdm(executor.map(interpretation_remplissage, listing_ids), total=len(listing_ids)))
 
-    print("Mois",month,"- Création de results_"+str(month)+".json")
+    print("Mois", month, "- Création de results_"+str(month)+".json")
     # Quand tous les threads ont terminé de remplir le dico interpretation
     with open('results_'+str(month)+'.json', 'w') as outfile:
         json.dump(interpretation, outfile)
@@ -314,10 +312,12 @@ for month in range(1, 13):
     print()
 
 # Liaison avec les commentaires de l'annonce
+
+
 def reviews_link(listing_id):
     global periodes_indispo_annee
     global tab_date
-    
+
     liaisons = {}
     liaisons["Synthese"] = {}
 
@@ -330,9 +330,8 @@ def reviews_link(listing_id):
         lock.acquire()
         last_scraping_date = tab_date[-1]
         lock.release()
-
-        commentaires = get_items_fetchall("select listing_id, scraping_date,date,reviewer_id,reviewer_name,comments from "+constants.AIRBNB+" where listing_id=" +
-                                          str(listing_id)+" and scraping_date='"+str(last_scraping_date)+"' order by date")
+        commentaires = get_items_fetchall("select listing_id, scraping_date,date,reviewer_id,reviewer_name,comments from "+constants.AIRBNB+" where listing_id="+str(listing_id)+" and scraping_date='"+str(
+            last_scraping_date)+"' and reviewer_id is not null union all select listing_id, scraping_date,date,reviewer_id,reviewer_name,comments from booking_comments where listing_id="+str(listing_id)+" and reviewer_id is not null order by date")
         # ETAPE 1 : commentaires dans les 15 jours après la réservation
         liaisons["Synthese"]["Nombre total de periodes"] = len(liste_periodes)
         for periode in liste_periodes:
@@ -341,7 +340,7 @@ def reviews_link(listing_id):
                 date_du_commentaire = datetime.datetime.strptime(
                     commentaire[2], "%Y-%m-%d").date()
                 if periode[1] < date_du_commentaire and periode[1] > date_du_commentaire-datetime.timedelta(days=14):
-                    liaisons[str(periode)][commentaire[4]] = {
+                    liaisons[str(periode)][commentaire[3]] = {
                         "date": commentaire[2],
                         "reviewer_id": commentaire[3],
                         "reviewer_name": commentaire[4],
@@ -358,9 +357,9 @@ def reviews_link(listing_id):
                     nb_resa += 1
             if nb_resa > 0:
                 for periode in liaisons:
-                    if commentaire[4] in liaisons[str(periode)]:
+                    if commentaire[3] in liaisons[str(periode)]:
                         pourcentage = (1/nb_resa)*100
-                        liaisons[str(periode)][commentaire[4]
+                        liaisons[str(periode)][commentaire[3]
                                                ]["pourcentage"] = (1/nb_resa)*100
         # ETAPE 3 : retirer les commentaires de moins de 100% pour une réservation qui a déjà un commentaire à 100%
         continuer = True
@@ -476,7 +475,7 @@ def reviews_link(listing_id):
 
         # ETAPE 5 : Entre deux commentaires à 50% (ou 33%, 25%, etc.) pour une période, on garde le commentaire le plus proche en date donc le premier
         count_closest = 0
-        for x in range(2, 6):
+        for x in range(2, 8):
             pourcentage = (1/x)*100
             continuer = True
             liste_id_a_conserver = []
@@ -525,6 +524,7 @@ def reviews_link(listing_id):
     if liaisons != {}:
         with open('liaisons_'+str(listing_id)+'.json', 'w') as outfile:
             json.dump(liaisons, outfile)
+
 
 print("Liaisons avec les commentaires et génération des fichiers liaions_listing_id.json")
 with ThreadPoolExecutor(max_workers=130) as executor:
