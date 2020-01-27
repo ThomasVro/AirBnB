@@ -6,9 +6,9 @@ import datetime
 import calendar
 import pymysql.cursors
 from concurrent.futures import ThreadPoolExecutor
-import constants
 from tqdm import tqdm
 from threading import Lock
+import csv
 
 
 def get_items_list(sql_request):
@@ -44,7 +44,7 @@ def get_items_fetchall(sql_request):
 lock = Lock()
 
 year = constants.YEAR
-print("Script pour l'année", year)
+print("Script pour l'année", year,"\n\n--------------------------")
 
 # Liste des annonces
 listing_ids = get_items_list(
@@ -306,10 +306,9 @@ for month in range(1, 13):
 
     print("Mois", month, "- Création de results_"+str(month)+".json")
     # Quand tous les threads ont terminé de remplir le dico interpretation
-    with open('results_'+str(month)+'.json', 'w') as outfile:
+    with open('Generated files/results_'+str(month)+'.json', 'w') as outfile:
         json.dump(interpretation, outfile)
-    print("Fait.")
-    print()
+    print("Fait.\n")
 
 # Liaison avec les commentaires de l'annonce
 
@@ -361,6 +360,7 @@ def reviews_link(listing_id):
                         pourcentage = (1/nb_resa)*100
                         liaisons[str(periode)][commentaire[3]
                                                ]["pourcentage"] = (1/nb_resa)*100
+
         # ETAPE 3 : retirer les commentaires de moins de 100% pour une réservation qui a déjà un commentaire à 100%
         continuer = True
         while continuer:
@@ -396,8 +396,9 @@ def reviews_link(listing_id):
                                     liaisons[str(
                                         periode)][id]["pourcentage"] = nouveau_pourcentage
                                     if not continuer and nouveau_pourcentage == 100:
-                                        continuer = True
-        # ETAPE 4 : si on a déjà deux commentaires à 50%, on retire les autres avec une proba plus faible
+                                        continuer = True        
+
+        # # ETAPE 4 : si on a déjà deux commentaires à 50%, on retire les autres avec une proba plus faible
         continuer = True
         while continuer:
             continuer = False
@@ -473,6 +474,40 @@ def reviews_link(listing_id):
         # On l'ajoute à results.json dans la partie Synthèse de l'annonce
         liaisons["Synthese"]["Nombre de periodes validees a 100%"] = count_100percent
 
+        # Calculs des estimations
+        # Nb de jours loués de façon certaine (100%)
+        est_1 = 0
+        # Nb de jours loués de façon moins certaine (50%)
+        est_2 = 0
+        # Nb de jours encore moins certains (période de moins de 21 jours sans commentaire)
+        est_3 = 0
+        reviewer_ids_100 = []
+        periods_0 = []
+        for key, val in liaisons.items():
+            if key != "Synthese":
+                # On transforme la période inscrite en chaîne de caractères dans liaisons (pour la création du JSON) en datetime
+                periode = key.split(',')
+                debut_y = int(periode[0].strip("(datetime.date("))
+                debut_m = int(periode[1].strip())
+                debut_d = int(periode[2].strip(")").strip())
+                fin_y = int(periode[3].strip(" (datetime.date("))
+                fin_m = int(periode[4].strip())
+                fin_d = int(periode[5].strip("))").strip())
+                debut = datetime.date(debut_y, debut_m, debut_d)
+                fin = datetime.date(fin_y, fin_m, fin_d)
+
+                days = (fin-debut).days
+                # S'il n'y a pas de commentaire pour la période
+                if len(liaisons[key]) == 0:
+                    est_3 += days
+                    periods_0.append(key)
+                else:
+                    for reviewer_id, comment in liaisons[key].items():
+                        pourcentage = comment["pourcentage"]
+                        if pourcentage == 100 :
+                            est_1 += days
+                            reviewer_ids_100.append(reviewer_id)
+
         # ETAPE 5 : Entre deux commentaires à 50% (ou 33%, 25%, etc.) pour une période, on garde le commentaire le plus proche en date donc le premier
         count_closest = 0
         for x in range(2, 8):
@@ -521,12 +556,89 @@ def reviews_link(listing_id):
                 count_sans_com += 1
         liaisons["Synthese"]["Nombre de periodes validees sans commentaires de moins de 21 jours"] = count_sans_com
 
+        for key, val in liaisons.items():
+            if key != "Synthese":
+                # On transforme la période inscrite en chaîne de caractères dans liaisons (pour la création du JSON) en datetime
+                periode = key.split(',')
+                debut_y = int(periode[0].strip("(datetime.date("))
+                debut_m = int(periode[1].strip())
+                debut_d = int(periode[2].strip(")").strip())
+                fin_y = int(periode[3].strip(" (datetime.date("))
+                fin_m = int(periode[4].strip())
+                fin_d = int(periode[5].strip("))").strip())
+                debut = datetime.date(debut_y, debut_m, debut_d)
+                fin = datetime.date(fin_y, fin_m, fin_d)
+
+                days = (fin-debut).days
+                # S'il n'y a pas de commentaire pour la période
+                if len(liaisons[key]) == 0 and key not in periods_0:
+                    est_3 += days
+                else:
+                    for reviewer_id, comment in liaisons[key].items():
+                        pourcentage = comment["pourcentage"]
+                        if pourcentage == 100 and reviewer_id not in reviewer_ids_100:
+                            est_2 += days
+
     if liaisons != {}:
-        with open('liaisons_'+str(listing_id)+'.json', 'w') as outfile:
+        with open('Generated files/liaisons_'+str(listing_id)+'.json', 'w') as outfile:
             json.dump(liaisons, outfile)
+
+    return (listing_id, est_1, est_2, est_3)
 
 
 print("Liaisons avec les commentaires et génération des fichiers liaions_listing_id.json")
 with ThreadPoolExecutor(max_workers=130) as executor:
     results = list(
         tqdm(executor.map(reviews_link, listing_ids), total=len(listing_ids)))
+
+print("\nCalcul des estimations pour",len(listing_ids),"annonces")
+sum_1 = 0
+sum_2 = 0
+sum_3 = 0
+more_than_120_days_1 = 0
+more_than_120_days_2 = 0
+more_than_120_days_3 = 0
+for r in tqdm(results):
+    # Calcul des sommes des jours pour chaque estimation
+    sum_1 += r[1]
+    sum_2 += r[2]
+    sum_3 += r[3]
+    # Calcul du nombre d'annonces louées plus de 120 jours par an pour chaque estimation
+    if len(results)>1:
+        if r[1] > 120:
+            more_than_120_days_1 += 1
+        if r[1]+r[2] > 120:
+            more_than_120_days_2 += 1
+        if r[1]+r[2]+r[3] > 120:
+            more_than_120_days_3 += 1
+
+# Moyenne des estimations pour toutes les annonces
+est_1 = sum_1/len(listing_ids)
+est_2 = sum_2/len(listing_ids)
+est_3 = sum_3/len(listing_ids)
+print("Estimation 1 :", est_1)
+print("Estimation 2 :", est_2)
+print("Estimation 3 :", est_3)
+
+# Proportions
+if len(results)>1:
+    print("1 :", more_than_120_days_1, ", soit",
+        (more_than_120_days_1*100)/len(listing_ids),"%")
+    print("1 + 2 :", more_than_120_days_2, ", soit",
+        (more_than_120_days_2*100)/len(listing_ids),"%")
+    print("1 + 2 + 3 :", more_than_120_days_3, ", soit",
+        (more_than_120_days_3*100)/len(listing_ids),"%")
+
+print("\nGénération du fichier estimations.csv")
+with open('Generated files/estimations.csv', 'w', newline='') as csvfile:
+    fieldnames = ['listing_id', 'estimation 1', 'estimation 2', 'estimation 3']
+    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+    writer.writeheader()
+    for r in tqdm(results):
+        writer.writerow({
+            'listing_id': str(r[0]),
+            'estimation 1': str(r[1]),
+            'estimation 2': str(r[2]),
+            'estimation 3': str(r[3])
+        })

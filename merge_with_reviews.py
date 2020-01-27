@@ -1,9 +1,7 @@
-import pandas as pd
 import sqlite3
 import pymysql.cursors
 from concurrent.futures import ThreadPoolExecutor
 import constants
-import numpy as np
 from tqdm import tqdm
 
 

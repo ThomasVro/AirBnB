@@ -60,12 +60,14 @@ def thread_insert(id):
                 #On doit combler avec les data du dernier fichier de scraping qui contient les données manquantes
                 #Ex : pour 2018-01, le fichier commence à 2018-01-16 donc on va prendre les données de 2017-12
 
-                #On récupère le fichier de scraping précédent
-                if int(scraping[0].split('-')[1]) > 1:
-                    previous_scraping_year = scraping[0].split('-')[0]
-                    previous_scraping_month = str(int(scraping[0].split('-')[1]) -1) if int(scraping[0].split('-')[1]) -1 > 9 else '0'+str(int(scraping[0].split('-')[1]) -1)
+                #On construit le string contenant le nom du fichier de scraping précédent
+                #Ex : pour 2018-01, on veut avoir previous_scraping_date="2017-12"
+                scraping_date_actuelle = scraping[0]
+                if int(scraping_date_actuelle.split('-')[1]) > 1:
+                    previous_scraping_year = scraping_date_actuelle.split('-')[0]
+                    previous_scraping_month = str(int(scraping_date_actuelle.split('-')[1]) -1) if int(scraping_date_actuelle.split('-')[1]) -1 > 9 else '0'+str(int(scraping_date_actuelle.split('-')[1]) -1)
                 else:
-                    previous_scraping_year = int(scraping[0].split('-')[0]) -1
+                    previous_scraping_year = int(scraping_date_actuelle.split('-')[0]) -1
                     previous_scraping_month = 12
                 previous_scraping_date = str(previous_scraping_year)+'-'+str(previous_scraping_month)
 
@@ -77,7 +79,7 @@ def thread_insert(id):
                     date = datetime.datetime.strptime(s[2],"%Y-%m-%d")
                     if date < starting_date:
                         listing_id = s[0]
-                        s_date = scraping[0]
+                        s_date = scraping_date_actuelle
                         d = s[2]
                         availability = s[3]
                         rows_to_add.append((listing_id,s_date,d,availability))     
