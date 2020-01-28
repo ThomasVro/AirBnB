@@ -48,7 +48,7 @@ print("Script pour l'année", year,"\n\n--------------------------")
 
 # Liste des annonces
 listing_ids = get_items_list(
-    "select distinct listing_id from "+constants.AIRBNB+" order by listing_id")
+    "select distinct listing_id from "+constants.AIRBNB+" order by listing_id limit 1000")
 
 # Liste des dates de scraping
 tab_date = get_items_list(
@@ -613,12 +613,12 @@ for r in tqdm(results):
             more_than_120_days_3 += 1
 
 # Moyenne des estimations pour toutes les annonces
-est_1 = sum_1/len(listing_ids)
-est_2 = sum_2/len(listing_ids)
-est_3 = sum_3/len(listing_ids)
-print("Estimation 1 :", est_1)
-print("Estimation 2 :", est_2)
-print("Estimation 3 :", est_3)
+est_tot_1 = sum_1/len(listing_ids)
+est_tot_2 = sum_2/len(listing_ids)
+est_tot_3 = sum_3/len(listing_ids)
+print("Estimation 1 :", est_tot_1)
+print("Estimation 2 :", est_tot_2)
+print("Estimation 3 :", est_tot_3)
 
 # Proportions
 if len(results)>1:
